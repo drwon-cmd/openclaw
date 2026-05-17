@@ -52,28 +52,28 @@ fi
 # Build agents.defaults.model block from OPENROUTER_API_KEY presence
 # Model IDs verified against https://openrouter.ai/api/v1/models (2026-05-17, re-fetched)
 #
-# CATALOG WARNING (2026-05-17 re-verify):
-#   Previously listed models (deepseek-chat-v3.1, llama-3.3-70b:free, qwen3-next-80b:free)
-#   were all REMOVED from OpenRouter catalog between sessions. Always re-fetch /api/v1/models
-#   before deploying. build-then-verify.md v1.5 §8 (external-dependency spot-check).
+# CHAIN RATIONALE (2026-05-18 — Railway log diagnosis, runId 2a9cc7ed/a0cd9d28/d2e52cc7):
+#   Previous chain (v4-pro primary) produced 100% failure across 4 user messages:
+#     - openrouter/deepseek/deepseek-v4-pro: HTTP 500 × 4 retries (OpenRouter routing
+#       broken for Pro as of 2026-05-17 evening)
+#     - openrouter/deepseek/deepseek-v4-flash:free: reasoning-only × 2 retries
+#       (default thinking=high consumed budget without visible content)
+#     - openrouter/deepseek/deepseek-v4-flash (paid): 500 intermittent (1 success
+#       at 15:40:55, otherwise 500). When it works, it works.
 #
-# Primary: deepseek/deepseek-v4-pro
-#   Reason: Chat type confirmed in catalog (NOT reasoning-only). 1.6T params MoE,
-#   1M context. Pricing $0.435/M in, $0.87/M out. Plan §4 Q3 $2/day limit allows
-#   ~4.6M input or ~2.3M output tokens daily.
-#
-# Fallbacks:
-#   1. deepseek-v4-flash:free — FREE. RPM eased by $10 prepay (≥$5 policy).
-#      Catalog now lists as Chat type (was reasoning-only failure in earlier deploy).
-#      Try free first to amortize cost; if reasoning-only error returns, falls to paid.
-#   2. deepseek-v4-flash (paid) — $0.112/M in, $0.224/M out.
-#      Same model family, paid tier may behave differently if free hit reasoning-only.
+# NEW CHAIN — flash(paid) primary:
+#   1. deepseek-v4-flash (paid) — proven to succeed. $0.112/M in, $0.224/M out.
+#      Plan §4 Q3 $2/day still allows ~17M input or ~8M output tokens daily.
+#   2. deepseek-v4-flash:free — FREE backup. With thinkingDefault=medium below,
+#      reasoning-only risk reduced.
+#   3. deepseek-v4-pro — last resort. Currently 500ing but OpenRouter may restore.
+#      Once flash works, this is never tried (no delay impact in happy path).
 if [ -n "${OPENROUTER_API_KEY:-}" ]; then
   MODEL_BLOCK='"model": {
-        "primary": "openrouter/deepseek/deepseek-v4-pro",
+        "primary": "openrouter/deepseek/deepseek-v4-flash",
         "fallbacks": [
           "openrouter/deepseek/deepseek-v4-flash:free",
-          "openrouter/deepseek/deepseek-v4-flash"
+          "openrouter/deepseek/deepseek-v4-pro"
         ]
       },'
 else
@@ -97,6 +97,7 @@ cat > "${CONFIG_PATH}" <<EOF
   "agents": {
     "defaults": {
       ${MODEL_BLOCK}
+      "thinkingDefault": "medium",
       "sandbox": {
         "mode": "${SANDBOX_MODE}"
       }
