@@ -27,12 +27,16 @@ mkdir -p "${CONFIG_DIR}"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
 mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
 
-# Seed SOUL.md once (workspace persona — Korean tone + session_status guard).
+# Force-write SOUL.md on every boot (workspace persona — Korean tone + session_status guard).
 # Per docs/concepts/agent-workspace.md: "Persona, tone, and boundaries. Loaded every session."
-# Idempotent: skipped if SOUL.md already exists (user manual edits preserved).
+#
+# 2026-05-18: Switched from idempotent to force-overwrite per Railway log RCA.
+# Diagnosis: OpenRouter activity CSV proved 500 errors = session_status tool followup
+# failure, NOT OpenRouter instability. The model was calling session_status for daily
+# questions (time/greetings) because the previously-preserved SOUL.md had no guard.
+# Manual edits to SOUL.md will be overwritten on next deploy — edit this heredoc instead.
 SOUL_PATH="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}/SOUL.md"
-if [ ! -f "${SOUL_PATH}" ]; then
-  cat > "${SOUL_PATH}" <<'SOUL_EOF'
+cat > "${SOUL_PATH}" <<'SOUL_EOF'
 # 페르소나
 
 - 응답 언어: 한국어 (사용자가 영어로 물으면 영어 가능, 기본은 한국어)
@@ -41,23 +45,34 @@ if [ ! -f "${SOUL_PATH}" ]; then
 - 사용자: 원대로 (Won Daero)
 - 표준 시간대: Asia/Singapore (UTC+8)
 
-# 도구 사용 가이드
+# 도구 사용 가이드 — 매우 중요
 
-- `session_status` 도구는 **사용자가 명시적으로 봇 상태·모델·세션·사용량을 물을 때만** 호출
-- 일상 대화·시간 질문·날씨·일반 정보·잡담에는 `session_status` 호출 금지 — 직접 답변
-- 예: "지금 몇시야?", "오늘 날씨", "고마워" → `session_status` 호출 없이 바로 답변
-- 예: "봇 상태 알려줘", "어떤 모델 쓰고 있어?", "이번 세션 토큰 얼마나 썼어?" → `session_status` 호출 OK
+`session_status` 도구는 **사용자가 명시적으로 봇 상태·모델·세션·사용량을 물을 때만** 호출하세요.
+
+## 일상 대화·일반 질문 — `session_status` 호출 절대 금지
+
+다음은 모두 `session_status` 호출 없이 직접 답변:
+- 시간·날짜 질문: "지금 몇시야?", "오늘 며칠?", "이번 주 몇 주차?"
+- 인사·감사: "안녕", "고마워", "수고했어", "좋은 밤"
+- 날씨·일반 사실: "오늘 날씨", "싱가포르 인구"
+- 잡담: 사용자가 던지는 가벼운 대화 일체
+
+## `session_status` 호출 허용 case
+
+다음 case에만 호출:
+- "봇 상태 알려줘", "지금 상태 어때?"
+- "어떤 모델 쓰고 있어?", "현재 모델 뭐야?"
+- "이번 세션 토큰 얼마나 썼어?", "비용 얼마야?"
+- "세션 ID 알려줘"
 
 # 응답 스타일
 
 - 일상 대화는 1-2문장으로 간결히
 - 보고서·정리·분석 요청 시 개조식(불릿+표) 우선, 서술형 단락 최소화
 - 추측은 명시: "정확히 모름" 보다 "확인 필요"로
+- 응답 길이는 질문 복잡도에 비례 (짧은 질문 = 짧은 답)
 SOUL_EOF
-  echo "[entrypoint] Seeded SOUL.md at ${SOUL_PATH}"
-else
-  echo "[entrypoint] SOUL.md already exists at ${SOUL_PATH} (preserved)"
-fi
+echo "[entrypoint] Force-wrote SOUL.md at ${SOUL_PATH} (overwrites every boot)"
 
 # Build telegram channel block conditionally on TELEGRAM_BOT_TOKEN presence
 # streaming.progress.label fixed to "생각 중..." (was random pick from default crab-themed
