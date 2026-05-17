@@ -44,12 +44,15 @@ else
 fi
 
 # Build agents.defaults.model block from OPENROUTER_API_KEY presence
+# Model IDs verified against https://openrouter.ai/api/v1/models (2026-05-17)
+# All chain members are :free to protect Plan §4 Q3 ($2/day OpenRouter hard limit).
+# Claude must be invoked manually: /model openrouter/anthropic/claude-sonnet-4.6
 if [ -n "${OPENROUTER_API_KEY:-}" ]; then
   MODEL_BLOCK='"model": {
-        "primary": "openrouter/deepseek/deepseek-chat",
+        "primary": "openrouter/deepseek/deepseek-v4-flash:free",
         "fallbacks": [
-          "openrouter/qwen/qwen-2.5-72b-instruct",
-          "openrouter/anthropic/claude-3.7-sonnet"
+          "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
+          "openrouter/meta-llama/llama-3.3-70b-instruct:free"
         ]
       },'
 else
