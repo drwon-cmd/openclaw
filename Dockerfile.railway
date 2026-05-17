@@ -1,0 +1,43 @@
+# Railway 전용 slim Dockerfile (Plan v0.3 Phase 2.3 fix, 2026-05-17)
+#
+# Why not upstream Dockerfile?
+#   Upstream uses BuildKit syntax that Railway Metal builder rejects:
+#     - type=bind mount (other mount types are not supported on Railway)
+#     - cache mount id missing required `s/<service-id>-` prefix
+#   Reference: Railway docs §Dockerfiles "Railway supports Docker cache mounts using format
+#              --mount=type=cache,id=s/<service id>-<target path>"
+#
+# Approach:
+#   npm package openclaw@2026.5.12 includes telegram extension (package.json files §"!dist/extensions"
+#   pattern excludes only discord/whatsapp/lobster — telegram NOT excluded).
+#   Avoids BuildKit cache mount entirely.
+#
+# Upstream Dockerfile is preserved untouched for upstream sync compatibility.
+# Switch back to upstream Dockerfile by setting railway.json dockerfilePath: "Dockerfile".
+
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+
+# ca-certificates: HTTPS to OpenRouter/Telegram/Anthropic APIs
+# curl: healthcheck debugging
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Sharp uses prebuilt binaries — skip global libvips probe
+# Reference: openclaw AGENTS.md §Commands "SHARP_IGNORE_GLOBAL_LIBVIPS=1 pnpm install"
+ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
+
+# Global install pinned version
+# Reference: README §"Install (recommended)" — `npm install -g openclaw@latest`
+RUN npm install -g openclaw@2026.5.12
+
+ENV NODE_ENV=production
+ENV NODE_OPTIONS=--max-old-space-size=2048
+
+EXPOSE 8080
+
+# CMD repeated in railway.json startCommand for clarity. Railway uses startCommand if defined.
+# Reference: fly.toml L624 `--allow-unconfigured --port 3000 --bind lan` pattern
+CMD ["openclaw", "gateway", "--allow-unconfigured", "--port", "8080", "--bind", "lan"]
