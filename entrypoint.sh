@@ -99,28 +99,29 @@ fi
 # Build agents.defaults.model block from OPENROUTER_API_KEY presence
 # Model IDs verified against https://openrouter.ai/api/v1/models (2026-05-17, re-fetched)
 #
-# CHAIN RATIONALE (2026-05-18 — Railway log diagnosis, runId 2a9cc7ed/a0cd9d28/d2e52cc7):
-#   Previous chain (v4-pro primary) produced 100% failure across 4 user messages:
-#     - openrouter/deepseek/deepseek-v4-pro: HTTP 500 × 4 retries (OpenRouter routing
-#       broken for Pro as of 2026-05-17 evening)
-#     - openrouter/deepseek/deepseek-v4-flash:free: reasoning-only × 2 retries
-#       (default thinking=high consumed budget without visible content)
-#     - openrouter/deepseek/deepseek-v4-flash (paid): 500 intermittent (1 success
-#       at 15:40:55, otherwise 500). When it works, it works.
+# CHAIN RATIONALE (2026-05-18 — Railway log diagnosis after first fix, runId 9d323d45):
+#   Even with v4-flash primary, full chain cascade ~60s wait observed:
+#     stage 1: v4-flash HTTP 500 × 4 retries (~24s)
+#     stage 2: v4-flash:free reasoning-only × 2 retries (~10s)
+#     stage 3: v4-pro succeeded after ~16s
+#   OpenRouter DeepSeek is intermittently unstable across the entire family.
 #
-# NEW CHAIN — flash(paid) primary:
-#   1. deepseek-v4-flash (paid) — proven to succeed. $0.112/M in, $0.224/M out.
-#      Plan §4 Q3 $2/day still allows ~17M input or ~8M output tokens daily.
-#   2. deepseek-v4-flash:free — FREE backup. With thinkingDefault=medium below,
-#      reasoning-only risk reduced.
-#   3. deepseek-v4-pro — last resort. Currently 500ing but OpenRouter may restore.
-#      Once flash works, this is never tried (no delay impact in happy path).
+# FINAL CHAIN — DeepSeek 3 + Anthropic safety net:
+#   1. deepseek-v4-flash (paid) — primary. $0.112/M in, $0.224/M out.
+#   2. deepseek-v4-flash:free — FREE backup. thinkingDefault=medium limits
+#      reasoning-only risk.
+#   3. deepseek-v4-pro — last DeepSeek. Recovered at 16:18:47 in latest log.
+#   4. anthropic/claude-haiku-4.5 — safety net. Triggered ONLY when all 3
+#      DeepSeek fail. $1/M in, $5/M out (verified via OpenRouter /api/v1/models
+#      2026-05-18). 200K context, version-pinned (not router). Cost impact
+#      near-zero in happy path; protects user from full-cascade ~60s wait.
 if [ -n "${OPENROUTER_API_KEY:-}" ]; then
   MODEL_BLOCK='"model": {
         "primary": "openrouter/deepseek/deepseek-v4-flash",
         "fallbacks": [
           "openrouter/deepseek/deepseek-v4-flash:free",
-          "openrouter/deepseek/deepseek-v4-pro"
+          "openrouter/deepseek/deepseek-v4-pro",
+          "openrouter/anthropic/claude-haiku-4.5"
         ]
       },'
 else
