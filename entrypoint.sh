@@ -50,15 +50,30 @@ else
 fi
 
 # Build agents.defaults.model block from OPENROUTER_API_KEY presence
-# Model IDs verified against https://openrouter.ai/api/v1/models (2026-05-17)
-# All chain members are :free to protect Plan §4 Q3 ($2/day OpenRouter hard limit).
-# Claude must be invoked manually: /model openrouter/anthropic/claude-sonnet-4.6
+# Model IDs verified against https://openrouter.ai/api/v1/models (2026-05-17, re-fetched)
+#
+# CATALOG WARNING (2026-05-17 re-verify):
+#   Previously listed models (deepseek-chat-v3.1, llama-3.3-70b:free, qwen3-next-80b:free)
+#   were all REMOVED from OpenRouter catalog between sessions. Always re-fetch /api/v1/models
+#   before deploying. build-then-verify.md v1.5 §8 (external-dependency spot-check).
+#
+# Primary: deepseek/deepseek-v4-pro
+#   Reason: Chat type confirmed in catalog (NOT reasoning-only). 1.6T params MoE,
+#   1M context. Pricing $0.435/M in, $0.87/M out. Plan §4 Q3 $2/day limit allows
+#   ~4.6M input or ~2.3M output tokens daily.
+#
+# Fallbacks:
+#   1. deepseek-v4-flash:free — FREE. RPM eased by $10 prepay (≥$5 policy).
+#      Catalog now lists as Chat type (was reasoning-only failure in earlier deploy).
+#      Try free first to amortize cost; if reasoning-only error returns, falls to paid.
+#   2. deepseek-v4-flash (paid) — $0.112/M in, $0.224/M out.
+#      Same model family, paid tier may behave differently if free hit reasoning-only.
 if [ -n "${OPENROUTER_API_KEY:-}" ]; then
   MODEL_BLOCK='"model": {
-        "primary": "openrouter/deepseek/deepseek-v4-flash:free",
+        "primary": "openrouter/deepseek/deepseek-v4-pro",
         "fallbacks": [
-          "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
-          "openrouter/meta-llama/llama-3.3-70b-instruct:free"
+          "openrouter/deepseek/deepseek-v4-flash:free",
+          "openrouter/deepseek/deepseek-v4-flash"
         ]
       },'
 else
