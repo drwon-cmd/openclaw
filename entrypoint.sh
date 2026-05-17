@@ -17,6 +17,12 @@ set -e
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-/data/.openclaw}"
 CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-${CONFIG_DIR}/openclaw.json}"
 
+# Sandbox mode default: off (Railway/PaaS containers have no Docker CLI for nested sandboxing)
+# Reference: docker-compose.yml comment "Sandbox isolation requires Docker CLI in the image
+#            (build with --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1)"
+# Override: set OPENCLAW_SANDBOX_MODE=non-main|all only when running on self-hosted with docker.sock
+SANDBOX_MODE="${OPENCLAW_SANDBOX_MODE:-off}"
+
 mkdir -p "${CONFIG_DIR}"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
 mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
@@ -77,7 +83,7 @@ cat > "${CONFIG_PATH}" <<EOF
     "defaults": {
       ${MODEL_BLOCK}
       "sandbox": {
-        "mode": "non-main"
+        "mode": "${SANDBOX_MODE}"
       }
     }
   },
@@ -91,5 +97,6 @@ echo "[entrypoint] Generated openclaw.json at ${CONFIG_PATH}"
 echo "[entrypoint] Telegram channel: $([ -n "${TELEGRAM_BOT_TOKEN:-}" ] && echo enabled || echo disabled)"
 echo "[entrypoint] OpenRouter: $([ -n "${OPENROUTER_API_KEY:-}" ] && echo enabled || echo disabled)"
 echo "[entrypoint] DM policy: $([ -n "${OPENCLAW_DRWON_TELEGRAM_ID:-}" ] && echo allowlist || echo pairing)"
+echo "[entrypoint] Sandbox mode: ${SANDBOX_MODE}"
 
 exec "$@"
