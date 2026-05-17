@@ -27,6 +27,17 @@ mkdir -p "${CONFIG_DIR}"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
 mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
 
+# Delete BOOTSTRAP.md if present (per docs/concepts/agent.md:32, 42).
+# BOOTSTRAP.md injects "first-run ritual" guidance into the system prompt that
+# overrides SOUL.md persona and forces the model to call tools every turn while
+# searching for its identity. Result: 100% tool-followup HTTP 500 cascade.
+# Docs say: "delete after completing the ritual ... should not be recreated on later restarts."
+BOOTSTRAP_PATH="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}/BOOTSTRAP.md"
+if [ -f "${BOOTSTRAP_PATH}" ]; then
+  rm -f "${BOOTSTRAP_PATH}"
+  echo "[entrypoint] Removed BOOTSTRAP.md (ritual was hijacking SOUL.md persona — see RCA 2026-05-18)"
+fi
+
 # Force-write SOUL.md on every boot (workspace persona — Korean tone + session_status guard).
 # Per docs/concepts/agent-workspace.md: "Persona, tone, and boundaries. Loaded every session."
 #
