@@ -1,82 +1,55 @@
 #!/bin/sh
 # Railway entrypoint — generate openclaw.json from env vars before starting gateway
-# v0.4 (2026-05-18) — docs.openclaw.ai 전수 audit 반영 (P0+P1+P2 일괄 적용)
+# Plan v0.3 Phase 3.2 (2026-05-17)
 #
 # Why: Railway containers have no SSH access and no file browser. openclaw.json
 # must be created in the persistent volume (/data/.openclaw/) before gateway starts.
-# This script regenerates openclaw.json on every boot from current env vars.
+# This script regenerates openclaw.json on every boot from current env vars, so
+# users can toggle channels/models by editing Railway Variables alone.
 #
-# v0.4 changes (docs.openclaw.ai full audit RCA):
-#   - workspace: MEMORY.md 신규 추가 (long-term curated facts auto-load)
-#   - agents.defaults: userTimezone / envelopeTimezone / timeFormat / heartbeat=0m
-#   - session: dmScope / threadBindings 명시
-#   - tools: fs.workspaceOnly / exec.security=deny / elevated.enabled=false 명시
-#   - gateway: 미명시 (Dockerfile CMD `--allow-unconfigured --bind lan`이 처리.
-#     entrypoint.sh에서 auth.mode=none 명시 시 explicit security violation 거부 발생,
-#     2026-05-18 commit 655aea1d deploy 실패 RCA)
-#   - logging: redactSensitive=tools
-#   - cron / hooks: 명시 disable (Hermes 외부 처리 중)
-#   - update: checkOnStart=false (Railway redeploy마다 의미 없음)
-#   - channels.telegram: errorPolicy / errorCooldownMs / historyLimit / commands.native
-#   - mcp: placeholder (servers: {}) — 향후 Google Workspace + MS Office 365 통합 예정
-#     상세 가이드: wiki/projects/openclaw-personal-bot.md §MCP 추가 가이드
-#
-# References (verified 2026-05-18):
-#   - docs.openclaw.ai/gateway/configuration-reference
-#   - docs.openclaw.ai/concepts/timezone
-#   - docs.openclaw.ai/gateway/heartbeat
-#   - docs.openclaw.ai/concepts/agent-workspace
-#   - docs.openclaw.ai/concepts/memory
-#   - docs.openclaw.ai/channels/telegram
+# References:
+#   - openclaw docs §Configuration (JSON5 schema, hot reload)
+#   - openclaw docs §Telegram channel (botToken, dmPolicy, allowFrom)
+#   - .env.example L52-L74 (provider/channel env vars)
 
 set -e
 
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-/data/.openclaw}"
 CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-${CONFIG_DIR}/openclaw.json}"
 
-# 🚨 CRITICAL: openclaw process가 env var inherit하려면 *export* 필요
-# (shell `${VAR:-default}` 패턴은 shell variable만 set, exec된 process는 못 봄)
-# 2026-05-18 RCA: workspace 파일 6개 force-write가 /data/workspace에 쓰였지만
-# openclaw process는 default `/root/.openclaw/workspace`에서 읽어 페르소나 완전 미적용.
-# Source: src/agents/workspace-default.ts → env.OPENCLAW_WORKSPACE_DIR 우선, 없으면 ~/.openclaw/workspace
-export OPENCLAW_HOME="${OPENCLAW_HOME:-/data}"
-export OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
-export OPENCLAW_CONFIG_DIR
-export OPENCLAW_CONFIG_PATH
-export OPENCLAW_AUTH_PROFILE_SECRET_DIR="${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
-
 # Sandbox mode default: off (Railway/PaaS containers have no Docker CLI for nested sandboxing)
+# Reference: docker-compose.yml comment "Sandbox isolation requires Docker CLI in the image
+#            (build with --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1)"
+# Override: set OPENCLAW_SANDBOX_MODE=non-main|all only when running on self-hosted with docker.sock
 SANDBOX_MODE="${OPENCLAW_SANDBOX_MODE:-off}"
 
-# mDNS/Bonjour discovery disabled — Railway 환경에서 불필요 (외부 노출 0)
-export OPENCLAW_DISABLE_BONJOUR=1
-
 mkdir -p "${CONFIG_DIR}"
-mkdir -p "${OPENCLAW_WORKSPACE_DIR}"
-mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR}"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
 
-# Delete BOOTSTRAP.md if present (per docs/concepts/agent.md).
-# BOOTSTRAP.md is a one-time first-run ritual — should be deleted after completion.
-# Also delete from default ~/.openclaw/workspace in case prior boot wrote there.
-for BS_PATH in "${OPENCLAW_WORKSPACE_DIR}/BOOTSTRAP.md" "/root/.openclaw/workspace/BOOTSTRAP.md"; do
-  if [ -f "${BS_PATH}" ]; then
-    rm -f "${BS_PATH}"
-    echo "[entrypoint] Removed BOOTSTRAP.md at ${BS_PATH}"
-  fi
-done
+# Delete BOOTSTRAP.md if present (per docs/concepts/agent.md:32, 42).
+# BOOTSTRAP.md injects "first-run ritual" guidance into the system prompt that
+# overrides SOUL.md persona and forces the model to call tools every turn while
+# searching for its identity. Result: 100% tool-followup HTTP 500 cascade.
+# Docs say: "delete after completing the ritual ... should not be recreated on later restarts."
+BOOTSTRAP_PATH="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}/BOOTSTRAP.md"
+if [ -f "${BOOTSTRAP_PATH}" ]; then
+  rm -f "${BOOTSTRAP_PATH}"
+  echo "[entrypoint] Removed BOOTSTRAP.md (ritual was hijacking SOUL.md persona — see RCA 2026-05-18)"
+fi
 
-# Force-write 6 workspace files per docs.openclaw.ai/concepts/agent-workspace.
+# Force-write 5 workspace files per docs.openclaw.ai/concepts/agent-workspace + agent.
 # All injected into Project Context on first session turn (loaded every session).
 # Manual edits will be overwritten on next deploy — edit these heredocs instead.
 #
-# Native parse per docs (concepts/agent-workspace):
+# Splitting rationale (separation of concerns per official docs):
 #   IDENTITY.md  — agent name/vibe/emoji
 #   USER.md      — user profile + preferred address
-#   SOUL.md      — persona, tone, boundaries
-#   AGENTS.md    — operating instructions
+#   SOUL.md      — persona, tone, boundaries (voice/stance/style)
+#   AGENTS.md    — operating instructions + memory
 #   TOOLS.md     — user-maintained tool notes/conventions
-#   MEMORY.md    — long-term curated facts (auto-load on main session start)
-WORKSPACE="${OPENCLAW_WORKSPACE_DIR}"
+#   BOOTSTRAP.md — deleted (first-run ritual already complete)
+WORKSPACE="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
 
 # --- IDENTITY.md ---
 cat > "${WORKSPACE}/IDENTITY.md" <<'EOF_IDENTITY'
@@ -123,7 +96,7 @@ cat > "${WORKSPACE}/USER.md" <<'EOF_USER'
 EOF_USER
 echo "[entrypoint] Force-wrote USER.md"
 
-# --- SOUL.md (persona/tone/boundaries) ---
+# --- SOUL.md (persona/tone/boundaries only — operational rules moved to AGENTS.md) ---
 cat > "${WORKSPACE}/SOUL.md" <<'EOF_SOUL'
 # Voice
 
@@ -151,7 +124,7 @@ cat > "${WORKSPACE}/SOUL.md" <<'EOF_SOUL'
 EOF_SOUL
 echo "[entrypoint] Force-wrote SOUL.md"
 
-# --- AGENTS.md (operating rules) ---
+# --- AGENTS.md (operating rules — tools usage, response shape, etc.) ---
 cat > "${WORKSPACE}/AGENTS.md" <<'EOF_AGENTS'
 # 도구 사용 원칙 — 최우선
 
@@ -202,9 +175,9 @@ cat > "${WORKSPACE}/TOOLS.md" <<'EOF_TOOLS'
 
 # 차단된 도구 (호출 시도 자체 금지)
 
-다음은 `tools.profile = "messaging"` + 추가 deny 정책으로 자동 차단:
-- `exec`, `bash`, `process`, `code_execution` (shell 실행 — `tools.exec.security: "deny"`)
-- `read`, `write`, `edit`, `apply_patch` (file 조작 — `tools.fs.workspaceOnly: true`)
+다음은 `tools.profile = "messaging"` 의해 자동 deny — 호출 시도 시 즉시 차단되며 cascade 실패 유발:
+- `exec`, `bash`, `process`, `code_execution` (shell 실행)
+- `read`, `write`, `edit`, `apply_patch` (file 조작)
 - `web_search`, `web_fetch`, `x_search`
 - `browser`, `canvas`
 - `gateway`, `cron`, `sessions_spawn`
@@ -217,49 +190,10 @@ cat > "${WORKSPACE}/TOOLS.md" <<'EOF_TOOLS'
 EOF_TOOLS
 echo "[entrypoint] Force-wrote TOOLS.md"
 
-# --- MEMORY.md (long-term curated facts, auto-load on main session start) ---
-# Per docs.openclaw.ai/concepts/memory: "MEMORY.md — Curated long-term memory, loads at every session start"
-cat > "${WORKSPACE}/MEMORY.md" <<'EOF_MEMORY'
-# 영구 사실 (Long-term Facts)
-
-## 사용자
-
-- 본명: 원대로 (Won Daero) — 영문 표기 Won Daero / drwon
-- 호칭: **원대표님** (모든 응답에 사용)
-- 시간대: Asia/Singapore (UTC+8)
-- 응답 언어: 한국어 (존댓말 ~합니다/~입니다)
-
-## 조직
-
-- 회사: WVB (Wilt Venture Builder Pte. Ltd, 싱가포르 법인)
-- 직책: Founder & CEO
-- 자회사: POPUP Studio, Zero100, 해녀의부엌(제주 F&B)
-- 운영 모델: AI Native 기반 1인 multiplier
-
-## 비서·에이전트 컨텍스트
-
-- 본 비서 (드원클로 / drwon claw): 개인 Telegram bot, openclaw framework + OpenRouter + Railway 배포
-- 별도 비서 (김실장 / Chief of Staff): 사내 운영·biz list·캘린더·이메일 통합 (별도 시스템)
-- 두 비서는 분리 — 본 비서는 *개인 Telegram 대화* 전용
-
-## 의사결정 선호
-
-- Trusted Advisor 톤: 따뜻하되 솔직, 우려 명시
-- 아첨 금지: "물론이죠!" / "좋은 질문!" / 과잉 감탄 0건
-- 답변 형식: 1-2문장 간결 우선, 보고서급 요청 시 Executive Summary 선행
-- 옵션 제시 후 사용자가 결정. 먼저 결론 내지 않음.
-
-## 환경 사실
-
-- 배포: Railway PaaS (openclaw-personal-bot-production.up.railway.app)
-- 모델 chain: OpenRouter 경유 — DeepSeek V4 Flash(primary) → Flash:free → V4 Pro → Anthropic Haiku 4.5
-- Heartbeat: disabled (every: "0m")
-- Tools profile: messaging (shell/fs/web 차단)
-EOF_MEMORY
-echo "[entrypoint] Force-wrote MEMORY.md"
-
 # Build telegram channel block conditionally on TELEGRAM_BOT_TOKEN presence
-# Includes: errorPolicy, errorCooldownMs, historyLimit, commands.native (P1 audit additions)
+# streaming.progress.label fixed to "생각 중..." (was random pick from default crab-themed
+# pool: Thinking/Shelling/Scuttling/Clawing/.../Nautiling/etc per
+# src/plugin-sdk/channel-streaming.ts:92-113 + docs/concepts/progress-drafts.md:113)
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
   if [ -n "${OPENCLAW_DRWON_TELEGRAM_ID:-}" ]; then
     # allowlist mode — user ID pre-registered, pairing not needed
@@ -271,16 +205,8 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
       "streaming": {
         "mode": "progress",
         "progress": {
-          "label": "생각 중...",
-          "toolProgress": false
+          "label": "생각 중..."
         }
-      },
-      "errorPolicy": "always",
-      "errorCooldownMs": 60000,
-      "historyLimit": 50,
-      "dmHistoryLimit": 50,
-      "commands": {
-        "native": "auto"
       }
     }'
   else
@@ -292,16 +218,8 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
       "streaming": {
         "mode": "progress",
         "progress": {
-          "label": "생각 중...",
-          "toolProgress": false
+          "label": "생각 중..."
         }
-      },
-      "errorPolicy": "always",
-      "errorCooldownMs": 60000,
-      "historyLimit": 50,
-      "dmHistoryLimit": 50,
-      "commands": {
-        "native": "auto"
       }
     }'
   fi
@@ -310,8 +228,24 @@ else
 fi
 
 # Build agents.defaults.model block from OPENROUTER_API_KEY presence
-# CHAIN: deepseek-v4-flash → :free → v4-pro → anthropic/claude-haiku-4.5
-# Verified 2026-05-17 against https://openrouter.ai/api/v1/models
+# Model IDs verified against https://openrouter.ai/api/v1/models (2026-05-17, re-fetched)
+#
+# CHAIN RATIONALE (2026-05-18 — Railway log diagnosis after first fix, runId 9d323d45):
+#   Even with v4-flash primary, full chain cascade ~60s wait observed:
+#     stage 1: v4-flash HTTP 500 × 4 retries (~24s)
+#     stage 2: v4-flash:free reasoning-only × 2 retries (~10s)
+#     stage 3: v4-pro succeeded after ~16s
+#   OpenRouter DeepSeek is intermittently unstable across the entire family.
+#
+# FINAL CHAIN — DeepSeek 3 + Anthropic safety net:
+#   1. deepseek-v4-flash (paid) — primary. $0.112/M in, $0.224/M out.
+#   2. deepseek-v4-flash:free — FREE backup. thinkingDefault=medium limits
+#      reasoning-only risk.
+#   3. deepseek-v4-pro — last DeepSeek. Recovered at 16:18:47 in latest log.
+#   4. anthropic/claude-haiku-4.5 — safety net. Triggered ONLY when all 3
+#      DeepSeek fail. $1/M in, $5/M out (verified via OpenRouter /api/v1/models
+#      2026-05-18). 200K context, version-pinned (not router). Cost impact
+#      near-zero in happy path; protects user from full-cascade ~60s wait.
 if [ -n "${OPENROUTER_API_KEY:-}" ]; then
   MODEL_BLOCK='"model": {
         "primary": "openrouter/deepseek/deepseek-v4-flash",
@@ -322,6 +256,7 @@ if [ -n "${OPENROUTER_API_KEY:-}" ]; then
         ]
       },'
 else
+  # Default openai/gpt-5.5 used if not set (matches first deploy logs)
   MODEL_BLOCK=''
 fi
 
@@ -334,8 +269,6 @@ else
   CHANNELS_OBJ=''
 fi
 
-# Full openclaw.json with P0+P1+P2 audit results applied
-# Schema reference: https://docs.openclaw.ai/gateway/configuration-reference
 cat > "${CONFIG_PATH}" <<EOF
 {
   "\$schema": "https://docs.openclaw.ai/schemas/openclaw.schema.json",
@@ -344,53 +277,13 @@ cat > "${CONFIG_PATH}" <<EOF
     "defaults": {
       ${MODEL_BLOCK}
       "thinkingDefault": "medium",
-      "userTimezone": "Asia/Singapore",
-      "envelopeTimezone": "Asia/Singapore",
-      "timeFormat": "24",
-      "heartbeat": {
-        "every": "0m"
-      },
       "sandbox": {
         "mode": "${SANDBOX_MODE}"
       }
     }
   },
-  "session": {
-    "dmScope": "per-channel-peer",
-    "threadBindings": {
-      "enabled": true,
-      "idleHours": 24
-    }
-  },
   "tools": {
-    "profile": "messaging",
-    "fs": {
-      "workspaceOnly": true
-    },
-    "exec": {
-      "security": "deny",
-      "ask": "always"
-    },
-    "elevated": {
-      "enabled": false
-    }
-  },
-  "logging": {
-    "level": "info",
-    "redactSensitive": "tools"
-  },
-  "cron": {
-    "enabled": false
-  },
-  "hooks": {
-    "enabled": false
-  },
-  "update": {
-    "checkOnStart": false
-  },
-  "mcp": {
-    "sessionIdleTtlMs": 600000,
-    "servers": {}
+    "profile": "messaging"
   }
 }
 EOF
@@ -400,13 +293,5 @@ echo "[entrypoint] Telegram channel: $([ -n "${TELEGRAM_BOT_TOKEN:-}" ] && echo 
 echo "[entrypoint] OpenRouter: $([ -n "${OPENROUTER_API_KEY:-}" ] && echo enabled || echo disabled)"
 echo "[entrypoint] DM policy: $([ -n "${OPENCLAW_DRWON_TELEGRAM_ID:-}" ] && echo allowlist || echo pairing)"
 echo "[entrypoint] Sandbox mode: ${SANDBOX_MODE}"
-echo "[entrypoint] Heartbeat: disabled (every=0m)"
-echo "[entrypoint] Timezone: Asia/Singapore"
-echo "[entrypoint] mDNS/Bonjour: disabled"
-echo "[entrypoint] MCP: ready (servers: empty — add Google Workspace / MS365 via mcp.servers in this script)"
-echo "[entrypoint] OPENCLAW_WORKSPACE_DIR=${OPENCLAW_WORKSPACE_DIR} (exported)"
-echo "[entrypoint] OPENCLAW_HOME=${OPENCLAW_HOME} (exported)"
-echo "[entrypoint] workspace contents:"
-ls -la "${OPENCLAW_WORKSPACE_DIR}" | sed 's/^/  /'
 
 exec "$@"
