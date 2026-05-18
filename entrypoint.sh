@@ -11,7 +11,9 @@
 #   - agents.defaults: userTimezone / envelopeTimezone / timeFormat / heartbeat=0m
 #   - session: dmScope / threadBindings 명시
 #   - tools: fs.workspaceOnly / exec.security=deny / elevated.enabled=false 명시
-#   - gateway: bind=loopback / auth.mode=none (Telegram outbound only, no inbound exposure)
+#   - gateway: 미명시 (Dockerfile CMD `--allow-unconfigured --bind lan`이 처리.
+#     entrypoint.sh에서 auth.mode=none 명시 시 explicit security violation 거부 발생,
+#     2026-05-18 commit 655aea1d deploy 실패 RCA)
 #   - logging: redactSensitive=tools
 #   - cron / hooks: 명시 disable (Hermes 외부 처리 중)
 #   - update: checkOnStart=false (Railway redeploy마다 의미 없음)
@@ -358,12 +360,6 @@ cat > "${CONFIG_PATH}" <<EOF
     },
     "elevated": {
       "enabled": false
-    }
-  },
-  "gateway": {
-    "bind": "loopback",
-    "auth": {
-      "mode": "none"
     }
   },
   "logging": {
