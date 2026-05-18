@@ -323,22 +323,21 @@ fi
 #     stage 3: v4-pro succeeded after ~16s
 #   OpenRouter DeepSeek is intermittently unstable across the entire family.
 #
-# FINAL CHAIN — DeepSeek 3 + Anthropic safety net:
+# FINAL CHAIN — DeepSeek 3 + Google safety net:
 #   1. deepseek-v4-flash (paid) — primary. $0.112/M in, $0.224/M out.
-#   2. deepseek-v4-flash:free — FREE backup. thinkingDefault=medium limits
-#      reasoning-only risk.
-#   3. deepseek-v4-pro — last DeepSeek. Recovered at 16:18:47 in latest log.
-#   4. anthropic/claude-haiku-4.5 — safety net. Triggered ONLY when all 3
-#      DeepSeek fail. $1/M in, $5/M out (verified via OpenRouter /api/v1/models
-#      2026-05-18). 200K context, version-pinned (not router). Cost impact
-#      near-zero in happy path; protects user from full-cascade ~60s wait.
+#   2. deepseek-v4-flash:free — FREE backup.
+#   3. deepseek-v4-pro — last DeepSeek.
+#   4. google/gemini-3.1-flash-lite — safety net. $0.25/M in, $1.5/M out.
+#      Replaces anthropic/claude-haiku-4.5 which does NOT exist in OpenRouter
+#      catalog (verified 2026-05-18 /api/v1/models). Previous 500 cascade was
+#      caused by all 3 DeepSeek failing + non-existent Haiku also failing.
 if [ -n "${OPENROUTER_API_KEY:-}" ]; then
   MODEL_BLOCK='"model": {
         "primary": "openrouter/deepseek/deepseek-v4-flash",
         "fallbacks": [
           "openrouter/deepseek/deepseek-v4-flash:free",
           "openrouter/deepseek/deepseek-v4-pro",
-          "openrouter/anthropic/claude-haiku-4.5"
+          "openrouter/google/gemini-3.1-flash-lite"
         ]
       },'
 else
