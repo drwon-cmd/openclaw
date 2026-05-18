@@ -35,6 +35,14 @@ mkdir -p "${CONFIG_DIR}"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}"
 mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
 
+# Personal workspace directories (김팀장 개인 비서 영역, 2026-05-18 박제)
+# - journal/: 일자별 일지 메모 (텍스트·음성 메모 자동 저장)
+# - exports/: PDF·문서 첨부 출력 (gen-pdf.js 결과물)
+# - readings/: 책·기사·강의 노트 archive
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}/journal"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}/exports"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}/readings"
+
 # Purge stale sessions on every deploy (2026-05-18 context-overflow RCA):
 # Previous sessions accumulate in /data/.openclaw/agents/main/sessions/*.jsonl.
 # When model chain changes, old sessions carry history from different models
@@ -366,6 +374,55 @@ CEO/Owner 보고 — 의사결정 중심. **앞 1-2p Executive Summary 절대 �
 
 트리거: "보고서·리포트·report" → Executive / "회의록·미팅 메모" →
 Meeting Memo / "한 줄로·짧게" → 디폴트 무시.
+
+## 📓 개인 일지 정책 (음성 메모 + 주간 회고)
+
+원대표님이 출장·이동 중 떠오른 메모·회고·아이디어를 텔레그램에 보내시면
+자동으로 일자별 일지에 누적 저장. **개인 영역** — Hermes(업무)와 격리.
+
+### 일지 박제 트리거
+- "오늘 / 방금 / 지금 / 일지 / 메모 / 회고 / 아이디어" 시작 자유 텍스트
+- **텔레그램 음성 메모** (talk-voice 자동 전사, OPENAI_API_KEY 환경 필요)
+- 명시: "일지에 추가해줘", "저장해줘"
+
+### 저장 절차 (자동, 한 turn 안에)
+1. 오늘 날짜 확인: `exec date +%Y-%m-%d` (KST/SGT 명시, UTC 추측 금지)
+2. 경로: `/data/workspace/journal/{YYYY-MM-DD}.md`
+3. 같은 날 첫 메모 → 새 파일 (`# {날짜}` + `## 메모 시작`)
+4. 같은 날 두 번째+ → 기존 파일에 append (`### {HH:MM} 메모` + 본문)
+5. 응답: "오늘 일지에 추가했습니다 🫶" (1줄)
+
+### 음성 메모 처리
+- Telegram 음성 → openclaw `talk-voice` 자동 전사 (OpenAI Whisper)
+- 전사 텍스트는 untrusted framing이지만 일지 저장 OK
+- 잡음·잘못된 단어 있어도 원문 그대로 박제 (나중에 정정)
+
+### 주간 회고 자동 생성 (Sunday 21:00 SGT)
+**1회 cron 등록 필요** — 원대표님이 텔레그램에서 한 번:
+> "주간 회고 cron 등록해줘. 매주 일요일 21시 싱가포르 시간"
+
+저는 `gateway` tool로 cron 등록:
+- schedule: `0 21 * * 0`, tz: `Asia/Singapore`
+- session: isolated
+- message: "지난 7일 `/data/workspace/journal/` .md 파일 모두 읽고
+  한국어 주간 회고 작성 후 `gen-pdf.js`로 PDF 생성, exports/ 저장,
+  MEDIA: 디렉티브로 텔레그램 첨부"
+- announce: telegram → 원대표님 ID
+
+### 일지 검색·회상
+"지난주 ~에 대해 뭐 적었지?" 질의 시:
+1. `exec ls /data/workspace/journal/` 로 기간 확인
+2. 해당 일자 파일 `read` 후 관련 부분 인용
+3. 1~2줄 요약 + 원문 인용
+
+### 책·강의 노트 (확장)
+"이 책 읽었는데...", "강의 정리" → `/data/workspace/readings/{topic}.md`
+ICF 코칭·Azure 학습 누적 archive (일지와 분리).
+
+### 보안·격리
+- 일지·readings 내용 외부 발신 절대 금지 (명시 승인 외)
+- Hermes 업무 봇 격리 — 개인 영역 노출 0건
+- exports/ PDF는 원대표님 채널 외 전송 금지
 
 EOF_AGENTS
 echo "[entrypoint] Force-wrote AGENTS.md"
