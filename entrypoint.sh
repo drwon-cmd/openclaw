@@ -198,6 +198,55 @@ cat > "${WORKSPACE}/TOOLS.md" <<'EOF_TOOLS'
 EOF_TOOLS
 echo "[entrypoint] Force-wrote TOOLS.md"
 
+# --- MEMORY.md (force-write baseline — prevents auto-distilled cruft override) ---
+# Reason (2026-05-18 RCA):
+#   openclaw memory-core dreaming sweep auto-writes MEMORY.md based on conversation.
+#   docs.openclaw.ai/concepts/memory.md: "Dreaming promotes only qualified items into
+#   long-term memory (MEMORY.md)" + "OpenClaw runs a silent turn that reminds the agent
+#   to save important context to memory files" before compaction.
+#   MEMORY.md is loaded as 8th (last) Project Context file per
+#   docs.openclaw.ai/concepts/system-prompt.md — meaning it can override IDENTITY/SOUL.
+#
+#   When workspace was incomplete (pre-8b59b19c), agent saved "user persona undefined"
+#   state to MEMORY.md (1435 bytes, 2026-05-18 03:30). This evergreen file then
+#   overrode IDENTITY.md/SOUL.md on every subsequent session → bot kept asking
+#   "what is my name?" in BOOTSTRAP-style ritual even after persona files were seeded.
+#
+#   Fix: force-write MEMORY.md to compact baseline on every boot. Agent may still
+#   append via silent-save during a session, but next boot resets to baseline.
+#   Trade-off: long-term memory accumulation is wiped per deploy (acceptable until
+#   dreaming behavior is tuned — see follow-up).
+
+# Log previous MEMORY.md content for RCA archaeology (force-write below overwrites)
+if [ -f "${WORKSPACE}/MEMORY.md" ]; then
+  echo "[entrypoint] [RCA] MEMORY.md content BEFORE force-write reset:"
+  sed 's/^/  PREV: /' "${WORKSPACE}/MEMORY.md"
+  echo "[entrypoint] [RCA] /PREV end"
+fi
+
+cat > "${WORKSPACE}/MEMORY.md" <<'EOF_MEMORY'
+# Project Context (baseline — entrypoint.sh가 매 boot 초기화)
+
+본 파일은 매 deploy boot 시 force-write됩니다. 자동 누적 메모리가 IDENTITY/SOUL을
+override해서 페르소나 혼란 유발하는 사고 방지 (RCA 2026-05-18: BOOTSTRAP-style 응답).
+
+## 사용자
+- 호칭: **원대표님** (본명 원대로 / 회사 ID drwon) — WVB CEO
+- 응답 언어: **한국어 존댓말** (~합니다/~입니다/~예요). 반말 절대 금지.
+- Timezone: Asia/Singapore (UTC+8)
+
+## 에이전트
+- 이름: **드원클로** (drwon claw) — 원대표 개인 AI 비서
+- 시그니처 이모지: 🦀 (정체성 표지. 메시지 본문 도배 금지)
+- Vibe: 짧고 핵심만. 아첨·과잉 칭찬 0건. 추측 시 "확인 필요" 라벨링.
+
+## 운영 룰
+- 일상 대화·인사·잡담엔 도구 호출 0건 (자체 지식으로 응답).
+- `tools.profile = "messaging"` — 차단된 도구 호출 시도 자체 금지.
+- 외부 발신·비용 발생 작업은 사용자 명시 승인 후에만.
+EOF_MEMORY
+echo "[entrypoint] Force-wrote MEMORY.md (baseline reset — RCA 2026-05-18)"
+
 # Build telegram channel block conditionally on TELEGRAM_BOT_TOKEN presence
 # streaming.progress.label fixed to "생각 중..." (was random pick from default crab-themed
 # pool: Thinking/Shelling/Scuttling/Clawing/.../Nautiling/etc per
@@ -304,5 +353,17 @@ echo "[entrypoint] Sandbox mode: ${SANDBOX_MODE}"
 echo "[entrypoint] OPENCLAW_WORKSPACE_DIR=${OPENCLAW_WORKSPACE_DIR} (exported)"
 echo "[entrypoint] workspace contents:"
 ls -la "${OPENCLAW_WORKSPACE_DIR}" 2>&1 | sed 's/^/  /'
+
+# 🔬 DIAGNOSTIC (2026-05-18) — MEMORY.md 자동 생성 추정. 내용 확인 후 제거 예정.
+# Reason: workspace에 entrypoint가 만들지 않은 MEMORY.md 1435 bytes 존재 (timestamp 03:30,
+# deploy 03:51보다 앞섬). docs.openclaw.ai/concepts/system-prompt.md에 따르면 MEMORY.md는
+# Project Context 8번째 (마지막) 적재 = IDENTITY/SOUL override 가능.
+if [ -f "${OPENCLAW_WORKSPACE_DIR}/MEMORY.md" ]; then
+  echo "[entrypoint] [DIAG] MEMORY.md content (auto-generated, investigating):"
+  sed 's/^/  MEMORY: /' "${OPENCLAW_WORKSPACE_DIR}/MEMORY.md"
+  echo "[entrypoint] [DIAG] MEMORY.md end"
+else
+  echo "[entrypoint] [DIAG] MEMORY.md not present"
+fi
 
 exec "$@"
