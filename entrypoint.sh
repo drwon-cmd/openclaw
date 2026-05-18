@@ -333,7 +333,7 @@ cat > "${CONFIG_PATH}" <<EOF
       "thinkingDefault": "medium",
       "userTimezone": "Asia/Singapore",
       "envelopeTimezone": "Asia/Singapore",
-      "timeFormat": "24h",
+      "timeFormat": "24",
       "heartbeat": {
         "every": "0m"
       },
