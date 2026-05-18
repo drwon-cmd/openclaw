@@ -46,6 +46,7 @@ mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/morning-brief"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/daily-wrap"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/weekly-retro"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/journal-add"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/model-hierarchy"
 
 # Purge stale sessions on every deploy (2026-05-18 context-overflow RCA):
 # Previous sessions accumulate in /data/.openclaw/agents/main/sessions/*.jsonl.
@@ -807,6 +808,126 @@ MEDIA: /data/workspace/exports/{YYYY-Www}-weekly-retro.pdf
 - 일지에 없는 추측 추가
 EOF_SKILL_WR
 echo "[entrypoint] Force-wrote skills/weekly-retro/SKILL.md"
+
+cat > "${WORKSPACE}/skills/model-hierarchy/SKILL.md" <<'EOF_SKILL_MH'
+---
+name: model-hierarchy
+description: >
+  Cost-optimize AI agent operations by routing tasks to appropriate models based on complexity.
+  Use this skill when: (1) deciding which model to use for a task, (2) spawning sub-agents,
+  (3) considering cost efficiency, (4) the current model feels like overkill for the task.
+  Triggers: "model routing", "cost optimization", "which model", "too expensive", "spawn agent".
+metadata: { "source": "zscole/model-hierarchy-skill" }
+---
+
+# Model Hierarchy (zscole/model-hierarchy-skill, 박제 2026-05-19)
+
+원대표님 김팀장에서 작업 복잡도에 따라 적절한 모델로 라우팅. 비용 ~10x 절감 효과.
+Source: https://github.com/zscole/model-hierarchy-skill
+
+## Core Principle
+
+**80% of agent tasks are janitorial.** File reads, status checks, formatting, simple Q&A.
+이런 일은 expensive 모델 불필요. Premium 모델은 진짜 deep reasoning 필요할 때만.
+
+## Model Tiers (2026.02 기준)
+
+### Tier 1: Cheap ($0.10-0.50/M tokens)
+| Model | Input | Output | Best For |
+|-------|-------|--------|----------|
+| DeepSeek V3 | $0.14 | $0.28 | General routine work |
+| Gemini Flash | $0.075 | $0.30 | High volume |
+| GPT-4o-mini | $0.15 | $0.60 | Quick responses |
+| Claude Haiku | $0.25 | $1.25 | Fast tool use |
+| Qwen3-235b (현재 primary) | $0.07 | $0.10 | 김팀장 default |
+
+### Tier 2: Mid ($1-5/M tokens)
+| Model | Input | Output | Best For |
+|-------|-------|--------|----------|
+| Claude Sonnet | $3.00 | $15.00 | Balanced performance |
+| GPT-4o | $2.50 | $10.00 | Multimodal tasks |
+| Gemini Pro | $1.25 | $5.00 | Long context |
+
+### Tier 3: Premium ($10-75/M tokens)
+| Model | Input | Output | Best For |
+|-------|-------|--------|----------|
+| Claude Opus | $15.00 | $75.00 | Complex reasoning |
+| GPT-5 | $75.00 | $150.00 | Frontier tasks |
+| o1 | $15.00 | $60.00 | Multi-step reasoning |
+
+## Task Classification
+
+### ROUTINE → Tier 1 (qwen3-235b 또는 cheaper)
+- 일지 저장 (journal-add)
+- 시간·날짜·날씨 조회
+- 파일 read/write
+- 상태 확인 (session_status)
+- 간단 포맷팅
+- 트리거: heartbeat, cron 단순 작업
+
+### MODERATE → Tier 2 (Claude Sonnet 등)
+- 보고서 초안 (Executive Format)
+- 회의록 정리 (Meeting Memo)
+- 코드 generation (standard patterns)
+- 일지 종합 (weekly-retro, daily-wrap)
+- web_search 결과 종합
+
+### COMPLEX → Tier 3 (Claude Opus 등)
+- 복잡한 의사결정 분석
+- 다단계 디버깅
+- 보안 검토
+- 이전 시도 실패 후 재시도
+- Long-context 추론 (>50K tokens)
+
+## Decision Algorithm
+
+```
+function selectModel(task):
+    # Vision 필요 시
+    if task.requiresImage: return VISION_MODEL  # Gemini/Claude/GPT
+
+    # 이전 실패 → 한 tier up
+    if task.previousAttemptFailed: return nextTierUp(prev)
+
+    # 명시 신호
+    if signal("debug|architect|design|security"): return TIER_3
+    if signal("write|code|summarize|analyze"):    return TIER_2
+
+    # 기본 분류
+    complexity = classify(task)
+    return TIER_1 if routine else TIER_2 if moderate else TIER_3
+```
+
+## 김팀장 적용 룰
+
+- **기본**: qwen3-235b primary (Tier 1)
+- **routine cron** (morning-brief, daily-wrap, journal-add): qwen3-235b lightContext
+- **moderate** (weekly-retro PDF, 보고서): primary 유지 — 비용 ok
+- **complex** (다단계 의사결정 분석, 디버깅): Claude Opus·Sonnet fallback 활용
+- **fallback chain 자체가 비용 절감**: qwen3 → deepseek → gemini-flash-lite → qwen3-coder:free
+
+## 비용 추정 (월 100K tokens/day)
+
+| 전략 | 월 비용 |
+|------|---------|
+| Pure Opus | ~$225 |
+| Pure Sonnet | ~$45 |
+| Hierarchy (80/15/5) | **~$19** |
+| 김팀장 현재 (qwen primary) | **~$5** |
+
+김팀장은 이미 hierarchy 적용 중 (qwen primary가 Tier 1보다 cheap). 이 skill은 다단계
+복잡 작업 시 escalation 판단 보조용.
+
+## 트리거
+- "비싸지 않아?", "모델 라우팅", "cost optimization"
+- 응답 시간이 너무 빠름 (overkill 신호)
+- 같은 작업 반복 (cache 가능?)
+
+## 금지
+- 단순 작업에 Opus 사용 (낭비)
+- 복잡 작업에 Tier 1 강행 후 fail (escalation 필요)
+EOF_SKILL_MH
+echo "[entrypoint] Force-wrote skills/model-hierarchy/SKILL.md (zscole/model-hierarchy-skill)"
 
 cat > "${WORKSPACE}/skills/journal-add/SKILL.md" <<'EOF_SKILL_JA'
 ---
