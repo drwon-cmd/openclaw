@@ -86,47 +86,106 @@ EOF_IDENTITY
 echo "[entrypoint] Force-wrote IDENTITY.md"
 
 # --- USER.md (원대로 대표 프로필 — WVB CEO) ---
-# Source: CLAUDE.md memory + LinkedIn https://www.linkedin.com/in/wondaero/
-# Note: LinkedIn HTTP 999 (anti-bot) — info from WVB CLAUDE.md/memory/people/
+# Source: LinkedIn 프로필 PDF (사용자 직접 제공, 2026-05-18)
+# https://www.linkedin.com/in/wondaero/  |  www.wiltvb.com/
 cat > "${WORKSPACE}/USER.md" <<'EOF_USER'
 # 이름·호칭
 
 - 본명: **원대로** (Won Daero)
-- 영문: Daero (Daniel) Won
+- 영문: **Daero Won** (also "Daniel")
 - 호칭: **원대표님** (모든 응답에서 공손히 사용)
 - 회사 ID: drwon
-- 이메일: drwon@wiltvb.com / drwon@wiltcm.com
-- LinkedIn: https://www.linkedin.com/in/wondaero/
+- 이메일: drwon@wiltcm.com / drwon@wiltvb.com
+- LinkedIn: linkedin.com/in/wondaero
+- 회사 웹: wiltvb.com
+- 위치: 싱가포르 거주 20년차 (Asia/Singapore, UTC+8)
 
-# 직책
+# 현재 직책 (concurrent)
 
-- **WVB (Wilt Venture Builder Pte. Ltd.)** — 창업자 & CEO
-- AI Native 1인 multiplier 모델로 운영
-- 본사: 싱가포르 (Asia/Singapore, UTC+8)
+- **Wilt Venture Builder Pte Ltd** — Managing Director (2015.10 ~ 현재, 10년+)
+  AI-native venture studio. 한국 스타트업·창업자와 싱가포르에서 Venture
+  building. AI / Contents / F&B 분야. 한국 Startup/SME/Investor의
+  동남아 진출 자문.
+- **Translink Investment** — Entrepreneur In Residence (2018.1 ~ 현재, 8년+)
+  VC 펀딩 가능한 신규 사업 개발, 포트폴리오사 due diligence 및 operational
+  지원, fundable concept 개발 (co-founder 포지션).
+- **d•camp** — Global Advisor (2023.3 ~ 현재)
+  은행권청년창업재단이 운영하는 한국 최초 multi-purpose 스타트업 허브.
+  19개 한국 주요 금융기관이 $744M 출연한 한국 최대 비영리 창업재단.
+  Singapore Business Playbook 운영.
 
-# 자회사·포트폴리오
+# 한 줄 정체성 (본인 표현)
+
+**Venture Builder & Investor | Venture Studio | Korea-Singapore Connector |
+Fractional Founder | Consultant | Columnist | Coach**
+
+본인 표현: "Fractional founder, not a bench coach. Co-building with Korean
+teams in enterprise AI, contents, and global market entry. 1 mission: build
+the next generation of Korean global companies."
+
+# 주요 경력 (역순)
+
+- **WILT CAPITAL MANAGEMENT PTE. LTD.** — CEO (2016.2 ~ 2020.7, 4년 6개월)
+  싱가포르 RFMC + Cayman SPC Hedge Fund 창업·운용. Hedge / PE
+  (commodity) / Crypto fund.
+- **KB Asset Management Singapore** — COO (2013.3 ~ 2016.2, 3년)
+  현대증권 자회사 AQG Capital 인수 후 KB Asset Mgmt Singapore로
+  변경. 싱가포르 RFMC + Cayman U$100m Hedge Fund 운용.
+  Compliance / Risk / Daily Ops 총괄.
+- **KTB Asia Advisors Pte Ltd** — Managing Director (2006.8 ~ 2012.12, 6년 5개월)
+  KTB 투자증권(現 DAOL Financial Group) 싱가포르 자회사. ADB·POSCO·
+  GS Group sponsored "Asia Clean Energy Fund" (재생에너지) P.E. 투자,
+  한국-동남아 cross-border deal Corporate Finance (Fund Placement /
+  M&A / IPO).
+- **KTB Network** — Venture Capitalist (2000.1 ~ 2012.12, 13년)
+  1) JAIC Asia Holdings 싱가포르 SVP (2006-2009) — MJAF Maybank
+     JAIC ASEAN Fund Advisor + KTB Network 동남아 투자 매니저
+  2) Overseas Investment Team Manager (2005-2006) — 중국·동남아 JV·투자
+  3) Venture Investment Team Manager (2001-2004) — IT/Service/Consumer
+     30+ 포트폴리오 운용
+  4) Chairman's Office (2000-2001) — 신사업 (Incubator / Media /
+     Internet Commerce / Education / HR)
+- **삼성물산** — IT Division Project Manager (1998.1 ~ 1999.12, 2년)
+  Humax 위성 STB + 디지털 기기 (MP3 Player, Voice Pen, 온라인 음악)
+  유럽·러시아 마케팅.
+
+# 학력
+
+- **Seoul National University (서울대학교)** — Bachelor's, Business
+  Administration and Management (1991.1 ~ 1998.1)
+
+# 자격
+
+- Professional Singapore Certified Management Consultant
+- GoMasterCoach's ICF-Approved Coaching Certification
+- Microsoft Certified: Azure Fundamentals
+
+# WVB 포트폴리오·관련 프로젝트
 
 - **POPUP Studio** — F&B/Hospitality 자회사
-- **Zero100** — 신규 비즈니스 프로젝트 (Venture Studio 파이프라인)
+- **Zero100** — 신규 비즈니스 프로젝트 파이프라인
 - **해녀의부엌** (제주해녀의부엌) — F&B 브랜드
-- **drwon-advisory** — Advisory 챗봇 서비스
+- **drwon-advisory** — 원대표 clone 챗봇 (Startup/VC/Singapore advisory)
+  URL: drwon-advisory-chatbot-production.up.railway.app
 
-# 배경
+# 핵심 전문성
 
-- VC / Venture Builder / IB 배경
-- AX (AI Transformation) 컨설팅 — CEO suite AX
-- FDE (Forward Deployed Engineer) 운영 경험
+- **Cross-border**: 한국-싱가포르-동남아 25년+ 경험
+- **VC / PE / Hedge Fund**: KTB Network 13년, KB Asset, WILT Capital
+- **Venture Building**: WVB 10년+ Fractional founder 모델
+- **AX (AI Transformation)**: AI-native venture studio 운영
+- **Enterprise AI / Contents / F&B / Global Market Entry** 4대 영역
 
 # 응답 선호
 
 - **언어**: 한국어 공손한 경어체 (~합니다/~입니다/~예요). 반말 절대 금지.
-- **분량**: 1~2문장 간결한 답변. 복잡한 사안은 개조식(불릿+표) 우선.
+- **분량**: 1~2문장 간결. 복잡한 사안은 개조식(불릿+표) 우선.
 - **톤**: 사실 기반 근거. 솔직한 우려 표명. Trusted Advisor.
 - **포맷**: 보고서급 요청 시 Executive Summary 선행.
 
 # 비선호 (절대 회피)
 
-- "물론이죠!", "좋은 질문입니다!", "물론입니다!" 같은 filler 인사
+- "물론이죠!", "좋은 질문입니다!" 같은 filler 인사
 - 과잉 감탄·아첨·사족
 - 추측을 사실처럼 단정하기
 - 반말 / 부정확한 호칭
