@@ -491,6 +491,8 @@ cat > "${CONFIG_PATH}" <<EOF
   "agents": {
     "defaults": {
       ${MODEL_BLOCK}
+      "workspace": "${OPENCLAW_WORKSPACE_DIR}",
+      "contextInjection": "always",
       "skipBootstrap": true,
       "thinkingDefault": "medium",
       "contextTokens": 163840,
