@@ -338,21 +338,22 @@ fi
 #     stage 3: v4-pro succeeded after ~16s
 #   OpenRouter DeepSeek is intermittently unstable across the entire family.
 #
-# FINAL CHAIN v2 — multi-vendor resilience (2026-05-18):
-#   1. deepseek/deepseek-chat (V3) — primary. $0.32/M in, $0.89/M out.
-#      Stable global #2 pick rate. Separate infra from V4 (which had 500 cascade).
-#   2. qwen/qwen3-235b-a22b-2507 — Qwen3 latest 235B. $0.07/M in, $0.10/M out.
-#      Best open-weight tool-calling, extremely cheap.
-#   3. google/gemini-3.1-flash-lite — proven safety net. $0.25/M in, $1.5/M out.
-#   4. qwen/qwen3-coder:free — FREE last resort. 1M context.
+# FINAL CHAIN v3 — context-safe multi-vendor (2026-05-18):
+#   deepseek-chat via OpenRouter enforces max_num_tokens=32768 server-side,
+#   but tools.profile="full" system prompt is ~33K tokens → permanent overflow.
+#   OpenRouter page claims 164K but API rejects >32K. Demoted to fallback.
 #
-#   Replaces V4-only chain that had full 500 cascade (all 3 DeepSeek V4 models
-#   returning HTTP 500 simultaneously on OpenRouter, 2026-05-18).
+#   1. qwen/qwen3-235b-a22b-2507 — primary. 262K context. $0.07/M in, $0.10/M out.
+#      Cheapest + largest context. Best open-weight tool-calling.
+#   2. deepseek/deepseek-chat (V3) — fallback. 32K via OpenRouter.
+#      Works after compaction reduces context. $0.32/M in, $0.89/M out.
+#   3. google/gemini-3.1-flash-lite — proven safety net. 1M ctx. $0.25/M in, $1.5/M out.
+#   4. qwen/qwen3-coder:free — FREE last resort. 1M context.
 if [ -n "${OPENROUTER_API_KEY:-}" ]; then
   MODEL_BLOCK='"model": {
-        "primary": "openrouter/deepseek/deepseek-chat",
+        "primary": "openrouter/qwen/qwen3-235b-a22b-2507",
         "fallbacks": [
-          "openrouter/qwen/qwen3-235b-a22b-2507",
+          "openrouter/deepseek/deepseek-chat",
           "openrouter/google/gemini-3.1-flash-lite",
           "openrouter/qwen/qwen3-coder:free"
         ]
