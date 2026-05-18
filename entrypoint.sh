@@ -17,6 +17,14 @@ set -e
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-/data/.openclaw}"
 CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-${CONFIG_DIR}/openclaw.json}"
 
+# 🚨 CRITICAL: openclaw process가 env var을 inherit하려면 *export* 필수.
+# shell `${VAR:-default}` 패턴은 shell variable만 set, child process는 못 봄.
+# Source: src/agents/workspace-default.ts:7-13
+#   env.OPENCLAW_WORKSPACE_DIR?.trim() || path.join(home, ".openclaw", "workspace")
+# Docker base node:24-bookworm-slim의 root user HOME=/root → default /root/.openclaw/workspace
+# 우리는 /data/workspace에 workspace 파일 force-write → export로 openclaw에 알려야 함
+export OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+
 # Sandbox mode default: off (Railway/PaaS containers have no Docker CLI for nested sandboxing)
 # Reference: docker-compose.yml comment "Sandbox isolation requires Docker CLI in the image
 #            (build with --build-arg OPENCLAW_INSTALL_DOCKER_CLI=1)"
@@ -24,7 +32,7 @@ CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-${CONFIG_DIR}/openclaw.json}"
 SANDBOX_MODE="${OPENCLAW_SANDBOX_MODE:-off}"
 
 mkdir -p "${CONFIG_DIR}"
-mkdir -p "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}"
 mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
 
 # Delete BOOTSTRAP.md if present (per docs/concepts/agent.md:32, 42).
@@ -293,5 +301,8 @@ echo "[entrypoint] Telegram channel: $([ -n "${TELEGRAM_BOT_TOKEN:-}" ] && echo 
 echo "[entrypoint] OpenRouter: $([ -n "${OPENROUTER_API_KEY:-}" ] && echo enabled || echo disabled)"
 echo "[entrypoint] DM policy: $([ -n "${OPENCLAW_DRWON_TELEGRAM_ID:-}" ] && echo allowlist || echo pairing)"
 echo "[entrypoint] Sandbox mode: ${SANDBOX_MODE}"
+echo "[entrypoint] OPENCLAW_WORKSPACE_DIR=${OPENCLAW_WORKSPACE_DIR} (exported)"
+echo "[entrypoint] workspace contents:"
+ls -la "${OPENCLAW_WORKSPACE_DIR}" 2>&1 | sed 's/^/  /'
 
 exec "$@"
