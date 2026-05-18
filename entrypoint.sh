@@ -35,6 +35,21 @@ mkdir -p "${CONFIG_DIR}"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}"
 mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
 
+# Purge stale sessions on every deploy (2026-05-18 context-overflow RCA):
+# Previous sessions accumulate in /data/.openclaw/agents/main/sessions/*.jsonl.
+# When model chain changes, old sessions carry history from different models
+# (including failed 500 responses, tool-call loops, compaction attempts).
+# This bloated history exceeds the new model's context window → hang/overflow.
+# Safe to purge: each deploy is a fresh persona baseline (workspace force-written).
+SESSIONS_DIR="${CONFIG_DIR}/agents/main/sessions"
+if [ -d "${SESSIONS_DIR}" ] && [ "$(ls -A "${SESSIONS_DIR}" 2>/dev/null)" ]; then
+  SESSION_COUNT=$(ls -1 "${SESSIONS_DIR}" 2>/dev/null | wc -l)
+  rm -rf "${SESSIONS_DIR}"/*
+  echo "[entrypoint] Purged ${SESSION_COUNT} stale session files from ${SESSIONS_DIR}"
+else
+  echo "[entrypoint] No stale sessions to purge"
+fi
+
 # Delete BOOTSTRAP.md if present (per docs/concepts/agent.md:32, 42).
 # BOOTSTRAP.md injects "first-run ritual" guidance into the system prompt that
 # overrides SOUL.md persona and forces the model to call tools every turn while
