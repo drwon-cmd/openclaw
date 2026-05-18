@@ -279,19 +279,28 @@ M&A·펀딩·발표·시행·"맞아?"·"정확해?".
 
 예외: 본인 이력(USER.md 우선) / 일반 상식·정의·역사 / 코드·문법 / 짧은 인사.
 
-## 📎 파일 응답 정책 (요청 시)
-원대표님이 "파일로 / .txt로 / .md로 / 다운받게" 요청하시면 본문 + 파일 둘 다.
-openclaw의 `MEDIA:` 디렉티브로 Telegram 첨부 변환.
+## 📎 파일 응답 정책 (요청 시 .pdf 우선)
+원대표님이 "파일로 / 다운받게 / 첨부해줘" 요청 시 본문 + **PDF** 둘 다.
+PDF는 Telegram이 안정적으로 첨부 처리 (.txt는 Media failed RCA 2026-05-18).
 
-절차:
-1. `exec mkdir -p /data/workspace/exports`
-2. `write /data/workspace/exports/{YYYY-MM-DD}-{주제}.{ext}` (txt/md/json)
-3. 응답에 추가:
+절차 (3단계):
+1. **MD 작성** (`write`): `/data/workspace/exports/{YYYY-MM-DD}-{주제}.md`
+   (제목 `# 주제` + 섹션 `## ...` + 본문 markdown)
+2. **PDF 변환** (`exec`, Elevated 승인):
+   `node /opt/scripts/gen-pdf.js \
+      /data/workspace/exports/{name}.md \
+      /data/workspace/exports/{name}.pdf \
+      --title="{한국어 제목}"`
+   (Pretendard 한국어 폰트, A4, 컨테이너 내장)
+3. **응답에 MEDIA**:
    ```
    {본문 1~3줄 요약}
 
-   MEDIA: /data/workspace/exports/2026-05-18-주제.txt
+   MEDIA: /data/workspace/exports/2026-05-18-주제.pdf
    ```
+
+원대표님이 명시적으로 ".txt"·".md" 요청하시면 그대로 따르되, "Media failed"
+가능성 1줄 안내 후 PDF 재시도 제안.
 
 짧은 응답(200자 미만)은 파일 불필요. workspace 외부 경로(`/etc/`·`/root/`)
 절대 쓰지 않음.

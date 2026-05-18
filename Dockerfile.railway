@@ -20,7 +20,7 @@ FROM node:24-bookworm-slim
 WORKDIR /app
 
 # ca-certificates: HTTPS to OpenRouter/Telegram/Anthropic APIs
-# curl: healthcheck debugging
+# curl: healthcheck debugging + Pretendard font download at build time
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
@@ -32,6 +32,24 @@ ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
 # Global install pinned version
 # Reference: README §"Install (recommended)" — `npm install -g openclaw@latest`
 RUN npm install -g openclaw@2026.5.12
+
+# PDF generation toolchain (2026-05-18 — MEDIA: .txt 실패 RCA after Telegram 'Media failed')
+# Why pdfkit: pure JS (no Chromium), 5MB, Korean font embed 지원.
+# Install in /opt/scripts so require() resolves via local node_modules.
+RUN mkdir -p /opt/scripts && cd /opt/scripts && npm install pdfkit@0.15 --no-audit --no-fund
+
+# Pretendard Korean font (OFL — https://github.com/orioncactus/pretendard)
+# Build-time download to avoid bloating git repo with font binaries.
+# Regular: ~700KB, Bold: ~750KB.
+RUN mkdir -p /opt/fonts && \
+    curl -fsSL -o /opt/fonts/Pretendard-Regular.otf \
+      https://github.com/orioncactus/pretendard/raw/main/packages/pretendard/dist/public/static/Pretendard-Regular.otf && \
+    curl -fsSL -o /opt/fonts/Pretendard-Bold.otf \
+      https://github.com/orioncactus/pretendard/raw/main/packages/pretendard/dist/public/static/Pretendard-Bold.otf
+
+# PDF generation script (used by bot via exec when 김팀장 needs to send .pdf)
+COPY tools/scripts/gen-pdf.js /opt/scripts/gen-pdf.js
+RUN chmod +x /opt/scripts/gen-pdf.js
 
 ENV NODE_ENV=production
 ENV NODE_OPTIONS=--max-old-space-size=2048
