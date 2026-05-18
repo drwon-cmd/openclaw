@@ -34,6 +34,17 @@ set -e
 CONFIG_DIR="${OPENCLAW_CONFIG_DIR:-/data/.openclaw}"
 CONFIG_PATH="${OPENCLAW_CONFIG_PATH:-${CONFIG_DIR}/openclaw.json}"
 
+# 🚨 CRITICAL: openclaw process가 env var inherit하려면 *export* 필요
+# (shell `${VAR:-default}` 패턴은 shell variable만 set, exec된 process는 못 봄)
+# 2026-05-18 RCA: workspace 파일 6개 force-write가 /data/workspace에 쓰였지만
+# openclaw process는 default `/root/.openclaw/workspace`에서 읽어 페르소나 완전 미적용.
+# Source: src/agents/workspace-default.ts → env.OPENCLAW_WORKSPACE_DIR 우선, 없으면 ~/.openclaw/workspace
+export OPENCLAW_HOME="${OPENCLAW_HOME:-/data}"
+export OPENCLAW_WORKSPACE_DIR="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+export OPENCLAW_CONFIG_DIR
+export OPENCLAW_CONFIG_PATH
+export OPENCLAW_AUTH_PROFILE_SECRET_DIR="${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
+
 # Sandbox mode default: off (Railway/PaaS containers have no Docker CLI for nested sandboxing)
 SANDBOX_MODE="${OPENCLAW_SANDBOX_MODE:-off}"
 
@@ -41,16 +52,18 @@ SANDBOX_MODE="${OPENCLAW_SANDBOX_MODE:-off}"
 export OPENCLAW_DISABLE_BONJOUR=1
 
 mkdir -p "${CONFIG_DIR}"
-mkdir -p "${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
-mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}"
+mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR}"
 
 # Delete BOOTSTRAP.md if present (per docs/concepts/agent.md).
 # BOOTSTRAP.md is a one-time first-run ritual — should be deleted after completion.
-BOOTSTRAP_PATH="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}/BOOTSTRAP.md"
-if [ -f "${BOOTSTRAP_PATH}" ]; then
-  rm -f "${BOOTSTRAP_PATH}"
-  echo "[entrypoint] Removed BOOTSTRAP.md (one-time ritual completed)"
-fi
+# Also delete from default ~/.openclaw/workspace in case prior boot wrote there.
+for BS_PATH in "${OPENCLAW_WORKSPACE_DIR}/BOOTSTRAP.md" "/root/.openclaw/workspace/BOOTSTRAP.md"; do
+  if [ -f "${BS_PATH}" ]; then
+    rm -f "${BS_PATH}"
+    echo "[entrypoint] Removed BOOTSTRAP.md at ${BS_PATH}"
+  fi
+done
 
 # Force-write 6 workspace files per docs.openclaw.ai/concepts/agent-workspace.
 # All injected into Project Context on first session turn (loaded every session).
@@ -63,7 +76,7 @@ fi
 #   AGENTS.md    — operating instructions
 #   TOOLS.md     — user-maintained tool notes/conventions
 #   MEMORY.md    — long-term curated facts (auto-load on main session start)
-WORKSPACE="${OPENCLAW_WORKSPACE_DIR:-/data/workspace}"
+WORKSPACE="${OPENCLAW_WORKSPACE_DIR}"
 
 # --- IDENTITY.md ---
 cat > "${WORKSPACE}/IDENTITY.md" <<'EOF_IDENTITY'
@@ -391,5 +404,9 @@ echo "[entrypoint] Heartbeat: disabled (every=0m)"
 echo "[entrypoint] Timezone: Asia/Singapore"
 echo "[entrypoint] mDNS/Bonjour: disabled"
 echo "[entrypoint] MCP: ready (servers: empty — add Google Workspace / MS365 via mcp.servers in this script)"
+echo "[entrypoint] OPENCLAW_WORKSPACE_DIR=${OPENCLAW_WORKSPACE_DIR} (exported)"
+echo "[entrypoint] OPENCLAW_HOME=${OPENCLAW_HOME} (exported)"
+echo "[entrypoint] workspace contents:"
+ls -la "${OPENCLAW_WORKSPACE_DIR}" | sed 's/^/  /'
 
 exec "$@"
