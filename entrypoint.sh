@@ -134,22 +134,30 @@ echo "[entrypoint] Force-wrote SOUL.md"
 
 # --- AGENTS.md (operating rules — tools usage, response shape, etc.) ---
 cat > "${WORKSPACE}/AGENTS.md" <<'EOF_AGENTS'
-# 도구 사용 원칙 — 최우선
+# 도구 사용 원칙 — 적극 활용
 
-**일상 대화·일반 질문에 도구 호출 금지. 자체 지식으로 답변하세요.**
+**openclaw의 full agent 활용도를 살리기 위해 도구를 적극 사용합니다.**
+`tools.profile = "full"` + Elevated allowlist [drwon] 적용 — 모든 빌트인 도구
+사용 가능하며 exec 계열 위험 도구는 자동으로 사용자 승인 단계 거칩니다.
 
-도구 호출은 응답 시간을 늘리고 followup 실패 가능성을 키웁니다. 다음 case는 도구 없이:
+# 활용 권장 — 도구 호출이 응답 품질을 높이는 case
 
-- 시간·날짜: "지금 몇시야?" → 컨텍스트 시간 정보·내부 시계 사용
-- 인사·감사·잡담: "안녕", "고마워" → 짧은 답변만
-- 날씨: "확인이 어렵습니다. 날씨 앱 참고 부탁드립니다" 식 직답
-- 일반 사실: 자체 지식. web_search 호출 금지.
+- 시간·날짜·정확한 정보: `exec date`, web_search 등 활용
+- 웹 정보 조회: web_search, web_fetch — 최신·구체 사실 필요 시
+- 파일·문서 처리: read/write/edit — 사용자가 파일 공유·요청 시
+- 이미지 생성: image_generate — 사용자가 명시 요청 시
+- 코드 실행: exec, bash — *Elevated 승인 후* 사용
+- 봇 자기 상태: session_status — 명시 질문 시
+- 세션 히스토리: sessions_history, sessions_list — 사용자 요청 시
+- 음성·이미지·파일 첨부 처리: Telegram 채널이 자동 처리
 
-# `session_status` 도구 — 명시 질문 시에만
+# Elevated (위험 도구) 사용 패턴
 
-다음 case에서만 호출:
-- "봇 상태 알려줘", "지금 상태 어때?"
-- "어떤 모델 쓰고 있어?", "이번 세션 토큰 얼마나 썼어?"
+- exec/bash 등 호스트 실행 도구는 `tools.elevated.enabled = true` +
+  `allowFrom.telegram = [drwon]` 안전망 적용됨
+- Telegram에서 `/elevated on` 으로 세션 단위 허용 가능,
+  `/elevated ask` 로 매번 확인 가능
+- Railway 환경에선 sandbox=off (Docker CLI 부재) — Elevated 승인이 유일 안전망
 
 # 응답 형식
 
@@ -169,32 +177,52 @@ cat > "${WORKSPACE}/AGENTS.md" <<'EOF_AGENTS'
 - 외부 발신 (메일·SNS·메시지 발송)은 사용자 명시 승인 후.
 - 비용 발생 작업은 무료/저렴/고가 옵션 비교 후 승인 요청.
 - 추측 응답 금지. 모르는 건 "확인 필요"로 명시.
+- exec 계열 호출 시 Elevated 승인 자동 트리거 — 의도 명시.
 EOF_AGENTS
 echo "[entrypoint] Force-wrote AGENTS.md"
 
 # --- TOOLS.md (tool conventions specific to this deployment) ---
 cat > "${WORKSPACE}/TOOLS.md" <<'EOF_TOOLS'
-# 사용 가능 도구
+# 활성 도구 — `tools.profile = "full"` (No restriction)
 
-`tools.profile = "messaging"` 적용 — 다음만 활성:
-- `message` (Telegram 답신)
-- `sessions_list`, `sessions_history`, `sessions_send`
-- `session_status` (봇 상태 명시 질문 시만)
+openclaw 모든 빌트인 도구 사용 가능. docs.openclaw.ai 공식 권장 = power user
+profile. Railway 환경 + Elevated allowlist [drwon] 안전망으로 운용.
 
-# 차단된 도구 (호출 시도 자체 금지)
+# 도구 그룹 (full profile)
 
-다음은 `tools.profile = "messaging"` 의해 자동 deny — 호출 시도 시 즉시 차단되며 cascade 실패 유발:
-- `exec`, `bash`, `process`, `code_execution` (shell 실행)
-- `read`, `write`, `edit`, `apply_patch` (file 조작)
-- `web_search`, `web_fetch`, `x_search`
-- `browser`, `canvas`
-- `gateway`, `cron`, `sessions_spawn`
+- `group:messaging` — Telegram 답신, send, 채널 인터랙션
+- `group:sessions` — sessions_list, sessions_history, sessions_send, sessions_spawn
+- `group:memory` — memory_search, memory_get, memory write
+- `group:fs` — read, write, edit, apply_patch (파일 조작)
+- `group:runtime` — exec, bash, process, code_execution (호스트 실행 ⚠️ Elevated 필요)
+- `group:web` — web_search, web_fetch, x_search (웹 조회)
+- `cron` — 정기 작업 스케줄링
+- `image`, `image_generate`, `video_generate` — 멀티미디어 생성
+- `session_status` — 봇 상태 조회
 
-# 도구 호출 패턴 가이드
+# Elevated 안전망 (Railway sandbox=off 보완)
 
-- 시간 질문: `exec date` 명령 시도 금지. 자체 reasoning으로 답.
-- 정보 검색: `web_search` 시도 금지. 자체 지식 + "확인 필요" 라벨링.
-- 사용자가 도구 결과를 명시 요청하지 않았다면 → 도구 호출 0건.
+Railway 컨테이너는 Docker CLI 없어 sandbox=all 불가 → exec 시도는 호스트에서
+직접 실행됨. 그 위험을 `tools.elevated`로 보완:
+
+- `tools.elevated.enabled = true`
+- `tools.elevated.allowFrom.telegram = ["${OPENCLAW_DRWON_TELEGRAM_ID}"]`
+- → drwon 외 발신자는 exec 시도해도 거부됨
+- → drwon이라도 exec 시점에 confirmation 단계 거침 (`/elevated ask` 모드)
+
+# Telegram 슬래시 명령 (docs 명시)
+
+- `/elevated on|off|ask|full` — 세션 단위 elevated 상태 토글
+- `/activation always|mention` — 그룹 채팅 trigger 모드 (DM은 기본 always)
+- `/pair` — device-pair 플러그인 (현재 차단 안 됨)
+- `/new` — 새 세션 시작 (세션 컨텍스트 리셋)
+
+# 도구 호출 가이드
+
+- 정확한 정보 필요 시 web_search·exec date 등 적극 활용
+- 사용자가 파일·이미지 공유하면 자동 처리 (file-transfer, image)
+- 음성 메시지는 talk-voice 플러그인이 자동 전사 (untrusted text로 framing)
+- exec 시도 시 사용자 명시 의도 확인 — "혹시 호스트에서 이 명령 실행할까요?" 식
 EOF_TOOLS
 echo "[entrypoint] Force-wrote TOOLS.md"
 
@@ -241,9 +269,10 @@ override해서 페르소나 혼란 유발하는 사고 방지 (RCA 2026-05-18: B
 - Vibe: 짧고 핵심만. 아첨·과잉 칭찬 0건. 추측 시 "확인 필요" 라벨링.
 
 ## 운영 룰
-- 일상 대화·인사·잡담엔 도구 호출 0건 (자체 지식으로 응답).
-- `tools.profile = "messaging"` — 차단된 도구 호출 시도 자체 금지.
-- 외부 발신·비용 발생 작업은 사용자 명시 승인 후에만.
+- `tools.profile = "full"` — 모든 빌트인 도구 활성 (web/fs/exec/image/cron 등).
+- exec 계열은 `tools.elevated.allowFrom.telegram = [drwon]` 안전망 + confirmation 필요.
+- 외부 발신·비용 발생 작업·exec 실행은 사용자 명시 승인 후에만.
+- 정확한 정보 필요 시 web_search·exec date 등 적극 활용.
 EOF_MEMORY
 echo "[entrypoint] Force-wrote MEMORY.md (baseline reset — RCA 2026-05-18)"
 
@@ -326,6 +355,29 @@ else
   CHANNELS_OBJ=''
 fi
 
+# Build tools.elevated block (Railway sandbox=off → exec confirmation via Elevated)
+# Reference: docs.openclaw.ai/gateway/sandbox-vs-tool-policy-vs-elevated.md
+#   "Elevated is an exec-only escape hatch" + allowFrom.<provider>=[user_id_strings]
+# Reference: docs.openclaw.ai/gateway/config-tools.md
+#   tools.profile = "full" → "No restriction (same as unset)"
+# Reason (2026-05-18 사용자 B' 결정): messaging profile은 openclaw의 본래 의도
+#   (full agent platform with 8 plugins)를 1/4로 축소했음. 사용자 명시 결정으로
+#   full + Elevated [drwon] 안전망 구성으로 전환. Railway Docker CLI 부재로
+#   sandbox=all 불가 → Elevated가 유일 안전망.
+if [ -n "${OPENCLAW_DRWON_TELEGRAM_ID:-}" ]; then
+  ELEVATED_BLOCK='"elevated": {
+      "enabled": true,
+      "allowFrom": {
+        "telegram": ["'"${OPENCLAW_DRWON_TELEGRAM_ID}"'"]
+      }
+    }'
+else
+  # Telegram ID 미설정 시 elevated 비활성 — 안전 디폴트
+  ELEVATED_BLOCK='"elevated": {
+      "enabled": false
+    }'
+fi
+
 cat > "${CONFIG_PATH}" <<EOF
 {
   "\$schema": "https://docs.openclaw.ai/schemas/openclaw.schema.json",
@@ -340,7 +392,8 @@ cat > "${CONFIG_PATH}" <<EOF
     }
   },
   "tools": {
-    "profile": "messaging"
+    "profile": "full",
+    ${ELEVATED_BLOCK}
   }
 }
 EOF
