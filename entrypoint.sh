@@ -262,7 +262,7 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
           "toolProgress": false
         }
       },
-      "errorPolicy": "reply",
+      "errorPolicy": "always",
       "errorCooldownMs": 60000,
       "historyLimit": 50,
       "dmHistoryLimit": 50,
@@ -283,7 +283,7 @@ if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
           "toolProgress": false
         }
       },
-      "errorPolicy": "reply",
+      "errorPolicy": "always",
       "errorCooldownMs": 60000,
       "historyLimit": 50,
       "dmHistoryLimit": 50,
