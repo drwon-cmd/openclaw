@@ -401,11 +401,9 @@ cat > "${CONFIG_PATH}" <<EOF
   "agents": {
     "defaults": {
       ${MODEL_BLOCK}
+      "skipBootstrap": true,
       "thinkingDefault": "medium",
-      "params": {
-        "contextWindow": 163840,
-        "maxTokens": 65536
-      },
+      "contextTokens": 163840,
       "sandbox": {
         "mode": "${SANDBOX_MODE}"
       }
