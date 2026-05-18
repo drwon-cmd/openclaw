@@ -42,6 +42,10 @@ mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/journal"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/exports"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/readings"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/morning-brief"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/daily-wrap"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/weekly-retro"
+mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/journal-add"
 
 # Purge stale sessions on every deploy (2026-05-18 context-overflow RCA):
 # Previous sessions accumulate in /data/.openclaw/agents/main/sessions/*.jsonl.
@@ -167,14 +171,6 @@ the next generation of Korean global companies."
 - Professional Singapore Certified Management Consultant
 - GoMasterCoach's ICF-Approved Coaching Certification
 - Microsoft Certified: Azure Fundamentals
-
-# WVB 포트폴리오·관련 프로젝트
-
-- **POPUP Studio** — F&B/Hospitality 자회사
-- **Zero100** — 신규 비즈니스 프로젝트 파이프라인
-- **해녀의부엌** (제주해녀의부엌) — F&B 브랜드
-- **drwon-advisory** — 원대표 clone 챗봇 (Startup/VC/Singapore advisory)
-  URL: drwon-advisory-chatbot-production.up.railway.app
 
 # 핵심 전문성
 
@@ -375,6 +371,20 @@ CEO/Owner 보고 — 의사결정 중심. **앞 1-2p Executive Summary 절대 �
 트리거: "보고서·리포트·report" → Executive / "회의록·미팅 메모" →
 Meeting Memo / "한 줄로·짧게" → 디폴트 무시.
 
+## 🧩 워크스페이스 참조 파일 (자동 주입 안 됨, 봇이 read로 로드)
+
+- `/data/workspace/PROJECTS.md` — WVB 자회사·진행 프로젝트·운영 챗봇
+  (프로젝트 질의·자회사 KPI 질문 시 먼저 read)
+- `/data/workspace/TASKS.md` — 이번주·오늘 우선순위 (원대표님 자유 수정)
+  (morning-brief / daily-wrap 시 필수 read)
+- `/data/workspace/skills/{name}/SKILL.md` — 정책 분리 모듈 (4개):
+  - **morning-brief**: 매일 07:00 SGT cron 또는 수동 호출
+  - **daily-wrap**: 매일 22:00 SGT cron 또는 수동 호출
+  - **weekly-retro**: 매주 일요일 21:00 SGT cron 또는 수동 호출
+  - **journal-add**: 음성·텍스트 메모 자동 일지 박제 (트리거 자동 감지)
+
+각 skills는 본문 instructions를 가지므로, 해당 작업 시작 시 SKILL.md 먼저 read.
+
 ## 📓 개인 일지 정책 (음성 메모 + 주간 회고)
 
 원대표님이 출장·이동 중 떠오른 메모·회고·아이디어를 텔레그램에 보내시면
@@ -548,6 +558,310 @@ newsletter (drwon.substack.com — Dr.Wonder's Curation Room)
 
 EOF_MEMORY
 echo "[entrypoint] Force-wrote MEMORY.md (baseline reset — RCA 2026-05-18)"
+
+# --- PROJECTS.md (자유 수정 영역 — entrypoint가 첫 부팅에만 seed, 이후 덮어쓰지 않음) ---
+# 봇이 프로젝트 질의 시 read하는 참조 파일. 자동 시스템 프롬프트 주입 안 됨.
+if [ ! -f "${WORKSPACE}/PROJECTS.md" ]; then
+cat > "${WORKSPACE}/PROJECTS.md" <<'EOF_PROJECTS'
+# 진행 중 프로젝트 (WVB 그룹)
+
+원대표님이 진행 중인 일들. 봇이 프로젝트 관련 질의 받으면 이 파일 read 후 답변.
+사용자가 자유 수정 가능 — entrypoint가 force-write하지 않음 (개인 영역).
+
+## WVB 자회사·관계사
+
+| 회사 | 상태 | 핵심 |
+|------|------|------|
+| **POPUP Studio** | Active, V13 시리즈 운영 | F&B/Hospitality 자회사 |
+| **Zero100** | 발굴 단계 | 신규 비즈니스 파이프라인 |
+| **해녀의부엌** (제주해녀의부엌) | Active, 챗봇 운영 중 | 제주 F&B 브랜드 |
+| **WILT Capital Mgmt** | 운영 종료 (2020) | 싱가포르 RFMC + Cayman Hedge Fund |
+
+## 운영 중 챗봇·서비스
+
+| 서비스 | 설명 | URL |
+|--------|------|-----|
+| **drwon-advisory** | 원대로 Advisory 챗봇 (Startup/VC/SG) | drwon-advisory-chatbot-production.up.railway.app |
+| **haenyeo-chatbot** | 제주해녀의부엌 챗봇 | haenyeo-chatbot-production.up.railway.app |
+| **WMPA** | WVB 마케팅 플랫폼 | wmpa-production.up.railway.app |
+| **김팀장** (저) | 원대표님 개인 비서 (Telegram) | @drwon_claw_bot |
+
+## 진행 중 핵심 이니셔티브
+
+- **CEO suite AX 컨설팅** — CEO 대상 AI Transformation 컨설팅
+- **FDE (Forward Deployed Engineer)** — 클라이언트 onsite AI 통합 모델
+- **drwon-advisory v2** — Advisory 챗봇 고도화
+- **bkit** — Claude Code 플러그인 (bkit-claude-code)
+- **Newsletter** — drwon.substack.com (Dr.Wonder's Curation Room)
+
+## 동시 직책 (concurrent)
+
+- **Translink Investment** — Entrepreneur In Residence (2018~)
+- **d•camp** — Global Advisor (2023~)
+EOF_PROJECTS
+echo "[entrypoint] Seeded PROJECTS.md (first boot only)"
+else
+echo "[entrypoint] PROJECTS.md exists — preserved"
+fi
+
+# --- TASKS.md (자유 수정 영역 — entrypoint가 첫 부팅에만 seed) ---
+if [ ! -f "${WORKSPACE}/TASKS.md" ]; then
+cat > "${WORKSPACE}/TASKS.md" <<'EOF_TASKS'
+# 이번주·오늘 우선순위
+
+원대표님이 직접 작성·수정하는 영역. 봇이 morning-brief / daily-wrap 시 이 파일 read.
+포맷은 자유 — 아래는 권장 예시.
+
+## 이번 주 (Week of YYYY-MM-DD)
+
+- [ ] (아직 작성 안 됨 — 원대표님이 채워주세요)
+
+## 오늘 (YYYY-MM-DD)
+
+- [ ] (아직 작성 안 됨)
+
+## 백로그 (Backlog)
+
+- (장기 미해결 항목 누적)
+
+## 형식 가이드 (참고용)
+
+- `- [ ] 행동` — 미완료
+- `- [x] 행동 ✓ YYYY-MM-DD` — 완료 (날짜 박제)
+- `- [-] 행동 → 백로그 이동 사유` — 보류
+- 우선순위 표기: 🔥 긴급 / ⭐ 중요 / 💡 아이디어
+EOF_TASKS
+echo "[entrypoint] Seeded TASKS.md (first boot only)"
+else
+echo "[entrypoint] TASKS.md exists — preserved"
+fi
+
+# --- SKILL.md 4개 (force-write — 정책 영구 영역) ---
+cat > "${WORKSPACE}/skills/morning-brief/SKILL.md" <<'EOF_SKILL_MB'
+---
+name: morning-brief
+description: 매일 아침 오늘 할 일 3개와 어제 일지 요약을 모바일에 푸시
+user-invocable: true
+---
+
+# 아침 브리프
+
+원대표님께 오늘 시작 직전 핵심 정리를 보내드립니다.
+
+## 트리거
+- cron: 매일 07:00 SGT 자동 발화 (isolated session, lightContext: true)
+- 수동: "아침 브리프", "morning brief", "오늘 시작 정리"
+
+## 작성 순서 (한 turn 안에 모두)
+
+1. **오늘 날짜 확인**: `exec date +%Y-%m-%d` (SGT 기준)
+2. **어제 일지 확인**: `read /data/workspace/journal/{어제}.md` (없으면 skip)
+3. **이번주 TASKS 확인**: `read /data/workspace/TASKS.md`
+4. **본문 작성** (아래 포맷):
+
+```
+🌅 굿모닝 원대표님
+
+**오늘 할 일 3개** (TASKS.md 기반):
+1. {우선순위 1}
+2. {우선순위 2}
+3. {우선순위 3}
+
+**어제 핵심 1줄**: {journal에서 추출}
+
+**오늘 첫 행동**: {3개 중 가장 작은 것 하나 콕 짚어 추천}
+
+좋은 하루 보내세요 🫶
+```
+
+## 분량 규칙
+- 3개 우선순위는 한 줄씩 (50자 이하)
+- 어제 1줄: 80자 이하
+- 첫 행동 추천: "30분 안에 끝낼 수 있는 것" 선호
+
+## TASKS.md 비어 있을 때
+"오늘 우선순위가 TASKS.md에 없습니다. 출근 후 채워주시면 내일부터 정확한 브리프 가능합니다 🫶"
+
+## 금지
+- "잠시만 기다려주세요" placeholder — 즉시 작성·전송
+- 어제 일지 인용 시 민감 정보 (사람 이름·금액) 모자이크 없이 노출 금지 (있으면 추상화)
+EOF_SKILL_MB
+echo "[entrypoint] Force-wrote skills/morning-brief/SKILL.md"
+
+cat > "${WORKSPACE}/skills/daily-wrap/SKILL.md" <<'EOF_SKILL_DW'
+---
+name: daily-wrap
+description: 매일 저녁 오늘 일지 종합과 내일 우선순위 정리
+user-invocable: true
+---
+
+# 데일리 랩
+
+원대표님 하루 마감 — 오늘 일지 정리 + 내일 안내.
+
+## 트리거
+- cron: 매일 22:00 SGT 자동 발화 (isolated session, lightContext: true)
+- 수동: "데일리 랩", "하루 마감", "오늘 정리"
+
+## 작성 순서 (한 turn 안에 모두)
+
+1. **오늘 날짜 확인**: `exec date +%Y-%m-%d`
+2. **오늘 일지 read**: `read /data/workspace/journal/{오늘}.md`
+3. **TASKS.md read**: 미완료 항목 식별
+4. **본문 작성**:
+
+```
+🌙 오늘 마감 정리
+
+**오늘 핵심 3개** (일지에서 추출):
+1. {사실/이벤트}
+2. {결정/통찰}
+3. {남은 미해결}
+
+**완료한 TASKS**: {체크박스 ✓ 된 항목 1-2개}
+
+**내일 우선순위** (제 추천):
+1. {미완료 TASKS 중 가장 시급한 것}
+2. {오늘 일지에서 떠오른 후속 액션}
+
+편안한 저녁 보내세요 🫶
+```
+
+## 일지 비어 있을 때
+"오늘 일지에 기록이 없습니다. 짧게라도 한 줄 남겨주시면 내일 회고 자료가 됩니다 🫶"
+
+## 분량 규칙
+- 핵심 3개: 각 한 줄 (80자 이하)
+- 내일 우선순위 2개: 한 줄씩
+- 전체 응답 300자 이하
+
+## 금지
+- 오늘 일지 전문 인용 금지 (요약만)
+- placeholder 응답
+EOF_SKILL_DW
+echo "[entrypoint] Force-wrote skills/daily-wrap/SKILL.md"
+
+cat > "${WORKSPACE}/skills/weekly-retro/SKILL.md" <<'EOF_SKILL_WR'
+---
+name: weekly-retro
+description: 매주 일요일 지난 7일 일지 종합 후 주간 회고 PDF 생성
+user-invocable: true
+---
+
+# 주간 회고
+
+원대표님 한 주 마감 — 일지 7일치 종합 PDF.
+
+## 트리거
+- cron: 매주 일요일 21:00 SGT 자동 발화 (isolated session, lightContext: true)
+- 수동: "주간 회고", "이번주 회고", "weekly retro"
+
+## 작성 순서 (한 turn 안에 모두)
+
+1. **날짜 범위 계산**: 지난 7일 (오늘 포함 또는 지난주 월~일)
+   - `exec date +%Y-%m-%d` → 오늘 / 7일 전 계산
+2. **일지 7일치 read**: `read /data/workspace/journal/{date}.md` for each (없는 날 skip)
+3. **markdown 본문 작성** (구조):
+
+```markdown
+# WVB 주간 회고 — {YYYY-Www}
+
+## 한 줄 결론
+{이번주 핵심 한 문장}
+
+## 일자별 핵심
+- **월 ({date})**: {1-2줄}
+- **화 ({date})**: ...
+... (일요일까지)
+
+## 반복 패턴·인사이트 (3개)
+1. ...
+2. ...
+3. ...
+
+## 다음 주 후속 제안 (3개)
+1. ...
+2. ...
+3. ...
+```
+
+4. **마크다운 저장**:
+   `write /data/workspace/exports/{YYYY-Www}-weekly-retro.md`
+5. **PDF 변환**:
+   `exec node /opt/scripts/gen-pdf.js       /data/workspace/exports/{YYYY-Www}-weekly-retro.md       /data/workspace/exports/{YYYY-Www}-weekly-retro.pdf       --title="WVB 주간 회고 {Www}"`
+6. **응답에 MEDIA**:
+```
+이번주 회고 정리 완료입니다 🫶
+주요 패턴 {N}개 / 후속 제안 {N}개.
+
+MEDIA: /data/workspace/exports/{YYYY-Www}-weekly-retro.pdf
+```
+
+## 일지 데이터 부족 시 (3일 이하 기록)
+"이번주 일지가 {N}일치만 있습니다. PDF 생략하고 짧은 텍스트 회고만 드립니다."
++ 본문에 일지 있는 날짜만 정리
+
+## 금지
+- 일지 원문 그대로 복붙 (요약·재구성 필수)
+- placeholder 응답
+- 일지에 없는 추측 추가
+EOF_SKILL_WR
+echo "[entrypoint] Force-wrote skills/weekly-retro/SKILL.md"
+
+cat > "${WORKSPACE}/skills/journal-add/SKILL.md" <<'EOF_SKILL_JA'
+---
+name: journal-add
+description: 텔레그램 음성·텍스트 메모를 일자별 일지에 자동 누적 저장
+user-invocable: false
+---
+
+# 일지 추가 (자동 처리)
+
+원대표님의 메모를 일자별 journal에 박제.
+
+## 트리거 (자동 감지)
+- "오늘 / 방금 / 지금 / 일지 / 메모 / 회고 / 아이디어" 시작 자유 텍스트
+- Telegram 음성 메모 (talk-voice 자동 전사)
+- 명시: "일지에 추가해줘", "저장해줘"
+
+## 절차 (한 turn 안에)
+
+1. **오늘 날짜**: `exec date +%Y-%m-%d` (SGT)
+2. **현재 시각**: `exec date +%H:%M` (SGT)
+3. **저장 경로**: `/data/workspace/journal/{YYYY-MM-DD}.md`
+4. **기존 파일 확인**: `exec test -f {path}` 또는 read 시도
+   - **없으면 (오늘 첫 메모)**:
+     ```
+     # {YYYY-MM-DD}
+
+     ## {HH:MM} 메모
+
+     {본문}
+     ```
+   - **있으면 (append)**:
+     ```
+     기존 내용...
+
+     ### {HH:MM} 메모
+
+     {본문}
+     ```
+5. **응답**: "오늘 일지에 추가했습니다 🫶" (1줄)
+
+## 음성 메모 처리
+- 전사된 텍스트는 그대로 박제 (잡음·잘못된 단어 정정 시도 X)
+- 원대표님이 나중에 직접 수정
+
+## 분량 규칙
+- 응답은 1줄
+- 본문은 원문 그대로 보존 (요약 X)
+
+## 금지
+- placeholder ("저장하겠습니다, 잠시만...")
+- 본문 임의 수정·요약
+- 외부 노출 (일지 내용 다른 채널로 발신 0건)
+EOF_SKILL_JA
+echo "[entrypoint] Force-wrote skills/journal-add/SKILL.md"
 
 # Build telegram channel block conditionally on TELEGRAM_BOT_TOKEN presence
 # streaming.progress.label fixed to "준비 중..." (비서 톤. was random pick from default crab-themed
