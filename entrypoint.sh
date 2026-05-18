@@ -323,21 +323,23 @@ fi
 #     stage 3: v4-pro succeeded after ~16s
 #   OpenRouter DeepSeek is intermittently unstable across the entire family.
 #
-# FINAL CHAIN — DeepSeek 3 + Google safety net:
-#   1. deepseek-v4-flash (paid) — primary. $0.112/M in, $0.224/M out.
-#   2. deepseek-v4-flash:free — FREE backup.
-#   3. deepseek-v4-pro — last DeepSeek.
-#   4. google/gemini-3.1-flash-lite — safety net. $0.25/M in, $1.5/M out.
-#      Replaces anthropic/claude-haiku-4.5 which does NOT exist in OpenRouter
-#      catalog (verified 2026-05-18 /api/v1/models). Previous 500 cascade was
-#      caused by all 3 DeepSeek failing + non-existent Haiku also failing.
+# FINAL CHAIN v2 — multi-vendor resilience (2026-05-18):
+#   1. deepseek/deepseek-chat (V3) — primary. $0.32/M in, $0.89/M out.
+#      Stable global #2 pick rate. Separate infra from V4 (which had 500 cascade).
+#   2. qwen/qwen3-235b-a22b-2507 — Qwen3 latest 235B. $0.07/M in, $0.10/M out.
+#      Best open-weight tool-calling, extremely cheap.
+#   3. google/gemini-3.1-flash-lite — proven safety net. $0.25/M in, $1.5/M out.
+#   4. qwen/qwen3-coder:free — FREE last resort. 1M context.
+#
+#   Replaces V4-only chain that had full 500 cascade (all 3 DeepSeek V4 models
+#   returning HTTP 500 simultaneously on OpenRouter, 2026-05-18).
 if [ -n "${OPENROUTER_API_KEY:-}" ]; then
   MODEL_BLOCK='"model": {
-        "primary": "openrouter/deepseek/deepseek-v4-flash",
+        "primary": "openrouter/deepseek/deepseek-chat",
         "fallbacks": [
-          "openrouter/deepseek/deepseek-v4-flash:free",
-          "openrouter/deepseek/deepseek-v4-pro",
-          "openrouter/google/gemini-3.1-flash-lite"
+          "openrouter/qwen/qwen3-235b-a22b-2507",
+          "openrouter/google/gemini-3.1-flash-lite",
+          "openrouter/qwen/qwen3-coder:free"
         ]
       },'
 else
