@@ -387,6 +387,10 @@ cat > "${CONFIG_PATH}" <<EOF
     "defaults": {
       ${MODEL_BLOCK}
       "thinkingDefault": "medium",
+      "params": {
+        "contextWindow": 163840,
+        "maxTokens": 65536
+      },
       "sandbox": {
         "mode": "${SANDBOX_MODE}"
       }
