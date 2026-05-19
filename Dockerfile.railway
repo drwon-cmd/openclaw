@@ -21,9 +21,17 @@ WORKDIR /app
 
 # ca-certificates: HTTPS to OpenRouter/Telegram/Anthropic APIs
 # curl: healthcheck debugging + Pretendard font download at build time
+# tzdata: Asia/Singapore timezone for cron SKILLs (morning-brief/daily-wrap/weekly-retro)
+#   RCA 2026-05-19 — morning-brief failed to find yesterday's journal because
+#   container TZ defaulted to UTC. SKILL `exec date +%Y-%m-%d` at 07:00 SGT
+#   (= 23:00 UTC previous day) returned wrong "today", so "yesterday" lookup
+#   missed 2026-05-18.md. Reference: memory/feedback_hermes_cron_timezone.md
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl \
+    ca-certificates curl tzdata \
     && rm -rf /var/lib/apt/lists/*
+
+# Set container timezone to Singapore for cron + date commands
+ENV TZ=Asia/Singapore
 
 # Sharp uses prebuilt binaries — skip global libvips probe
 # Reference: openclaw AGENTS.md §Commands "SHARP_IGNORE_GLOBAL_LIBVIPS=1 pnpm install"

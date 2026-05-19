@@ -655,8 +655,9 @@ user-invocable: true
 
 ## 작성 순서 (한 turn 안에 모두)
 
-1. **오늘 날짜 확인**: `exec date +%Y-%m-%d` (SGT 기준)
-2. **어제 일지 확인**: `read /data/workspace/journal/{어제}.md` (없으면 skip)
+1. **오늘 날짜 확인**: `exec TZ=Asia/Singapore date +%Y-%m-%d` (SGT 강제)
+2. **어제 날짜 계산**: `exec TZ=Asia/Singapore date -d 'yesterday' +%Y-%m-%d`
+3. **어제 일지 확인**: `read /data/workspace/journal/{어제}.md` (없으면 skip)
 3. **이번주 TASKS 확인**: `read /data/workspace/TASKS.md`
 4. **본문 작성** (아래 포맷):
 
@@ -706,7 +707,7 @@ user-invocable: true
 
 ## 작성 순서 (한 turn 안에 모두)
 
-1. **오늘 날짜 확인**: `exec date +%Y-%m-%d`
+1. **오늘 날짜 확인**: `exec TZ=Asia/Singapore date +%Y-%m-%d` (SGT 강제)
 2. **오늘 일지 read**: `read /data/workspace/journal/{오늘}.md`
 3. **TASKS.md read**: 미완료 항목 식별
 4. **본문 작성**:
@@ -760,7 +761,8 @@ user-invocable: true
 ## 작성 순서 (한 turn 안에 모두)
 
 1. **날짜 범위 계산**: 지난 7일 (오늘 포함 또는 지난주 월~일)
-   - `exec date +%Y-%m-%d` → 오늘 / 7일 전 계산
+   - `exec TZ=Asia/Singapore date +%Y-%m-%d` → 오늘 (SGT 강제)
+   - `exec TZ=Asia/Singapore date -d '7 days ago' +%Y-%m-%d` → 시작일
 2. **일지 7일치 read**: `read /data/workspace/journal/{date}.md` for each (없는 날 skip)
 3. **markdown 본문 작성** (구조):
 
