@@ -42,7 +42,10 @@ mkdir -p "${OPENCLAW_AUTH_PROFILE_SECRET_DIR:-/data/.openclaw-secrets}"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/journal"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/exports"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/readings"
-mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/morning-brief"
+# morning-brief skill 폐지 (2026-05-21 — Plan drwon-claw-auto-aggregate v1.0 Phase B)
+# Reason: Hermes wvb-daily-brief (06:00 SGT)와 중복 + TASKS.md 빈 칸 미작동.
+# Hermes 단독 morning brief로 일원화. 기존 morning-brief 디렉토리는 사용자가
+# 봇한테 한 번 "morning-brief skill 폐지하고 cron 등록도 제거" 시켜야 함.
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/daily-wrap"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/weekly-retro"
 mkdir -p "${OPENCLAW_WORKSPACE_DIR}/skills/journal-add"
@@ -637,69 +640,21 @@ else
 echo "[entrypoint] TASKS.md exists — preserved"
 fi
 
-# --- SKILL.md 4개 (force-write — 정책 영구 영역) ---
-cat > "${WORKSPACE}/skills/morning-brief/SKILL.md" <<'EOF_SKILL_MB'
----
-name: morning-brief
-description: 매일 아침 오늘 할 일 3개와 어제 일지 요약을 모바일에 푸시
-user-invocable: true
----
-
-# 아침 브리프
-
-원대표님께 오늘 시작 직전 핵심 정리를 보내드립니다.
-
-## 트리거
-- cron: 매일 07:00 SGT 자동 발화 (isolated session, lightContext: true)
-- 수동: "아침 브리프", "morning brief", "오늘 시작 정리"
-
-## 작성 순서 (한 turn 안에 모두)
-
-1. **오늘 날짜 확인**: `exec TZ=Asia/Singapore date +%Y-%m-%d` (SGT 강제)
-2. **어제 날짜 계산**: `exec TZ=Asia/Singapore date -d 'yesterday' +%Y-%m-%d`
-3. **어제 일지 확인**: `read /data/workspace/journal/{어제}.md` (없으면 skip)
-3. **이번주 TASKS 확인**: `read /data/workspace/TASKS.md`
-4. **본문 작성** (아래 포맷):
-
-```
-🌅 굿모닝 원대표님
-
-**오늘 할 일 3개** (TASKS.md 기반):
-1. {우선순위 1}
-2. {우선순위 2}
-3. {우선순위 3}
-
-**어제 핵심 1줄**: {journal에서 추출}
-
-**오늘 첫 행동**: {3개 중 가장 작은 것 하나 콕 짚어 추천}
-
-좋은 하루 보내세요 🫶
-```
-
-## 분량 규칙
-- 3개 우선순위는 한 줄씩 (50자 이하)
-- 어제 1줄: 80자 이하
-- 첫 행동 추천: "30분 안에 끝낼 수 있는 것" 선호
-
-## TASKS.md 비어 있을 때
-"오늘 우선순위가 TASKS.md에 없습니다. 출근 후 채워주시면 내일부터 정확한 브리프 가능합니다 🫶"
-
-## 금지
-- "잠시만 기다려주세요" placeholder — 즉시 작성·전송
-- 어제 일지 인용 시 민감 정보 (사람 이름·금액) 모자이크 없이 노출 금지 (있으면 추상화)
-EOF_SKILL_MB
-echo "[entrypoint] Force-wrote skills/morning-brief/SKILL.md"
+# --- SKILL.md force-write (정책 영구 영역) ---
+# 2026-05-21: morning-brief skill 폐지 (Plan drwon-claw-auto-aggregate v1.0 Phase B).
+# Hermes wvb-daily-brief (06:00 SGT)가 메인 morning brief로 일원화.
+# 폐지 후 사용자가 봇한테 한 번 "morning-brief skill 폐지하고 cron 제거" 시킬 것.
 
 cat > "${WORKSPACE}/skills/daily-wrap/SKILL.md" <<'EOF_SKILL_DW'
 ---
 name: daily-wrap
-description: 매일 저녁 오늘 일지 종합과 내일 우선순위 정리
+description: 매일 저녁 오늘 일지 종합 + wiki/projects 자동 추정 + 내일 우선순위
 user-invocable: true
 ---
 
-# 데일리 랩
+# 데일리 랩 (v2.0 — auto-aggregate)
 
-원대표님 하루 마감 — 오늘 일지 정리 + 내일 안내.
+원대표님 하루 마감 — 오늘 일지 정리 + 일지 빈 경우 wiki 자동 추정 + 내일 안내.
 
 ## 트리거
 - cron: 매일 22:00 SGT 자동 발화 (isolated session, lightContext: true)
@@ -708,9 +663,14 @@ user-invocable: true
 ## 작성 순서 (한 turn 안에 모두)
 
 1. **오늘 날짜 확인**: `exec TZ=Asia/Singapore date +%Y-%m-%d` (SGT 강제)
-2. **오늘 일지 read**: `read /data/workspace/journal/{오늘}.md`
-3. **TASKS.md read**: 미완료 항목 식별
-4. **본문 작성**:
+2. **오늘 일지 read**: `read /data/workspace/journal/{오늘}.md` (있을 수도 없을 수도)
+3. **분기 처리**:
+   - 일지 있음 → Path A (일지 기반 마감)
+   - 일지 없음 → Path B (wiki/projects 자동 추정 + voice memo CTA)
+
+### Path A — 일지 있을 때 (기존 동작 유지)
+
+`/data/workspace/TASKS.md` 미완료 항목 식별 + 일지에서 핵심 추출:
 
 ```
 🌙 오늘 마감 정리
@@ -720,26 +680,63 @@ user-invocable: true
 2. {결정/통찰}
 3. {남은 미해결}
 
-**완료한 TASKS**: {체크박스 ✓ 된 항목 1-2개}
+**완료한 TASKS**: {체크박스 ✓ 된 항목 1-2개, TASKS.md 비어 있으면 "(미작성)"}
 
 **내일 우선순위** (제 추천):
-1. {미완료 TASKS 중 가장 시급한 것}
+1. {미완료 TASKS 중 가장 시급한 것 — TASKS.md 비어 있으면 wiki/projects 활성 항목 1개}
 2. {오늘 일지에서 떠오른 후속 액션}
 
 편안한 저녁 보내세요 🫶
 ```
 
-## 일지 비어 있을 때
-"오늘 일지에 기록이 없습니다. 짧게라도 한 줄 남겨주시면 내일 회고 자료가 됩니다 🫶"
+### Path B — 일지 없을 때 (auto-aggregate)
+
+`/data/wiki/wiki/projects/*.md` read (최근 mtime 5개) + 활성 프로젝트 1-2개 추출:
+
+```
+🌙 오늘 마감 정리
+
+오늘 일지가 비어 있어 wiki에서 추정한 활동입니다:
+
+**오늘 추정 진행** (wiki/projects 기반):
+- {프로젝트명}: {1줄 요약 또는 최근 status}
+
+**📱 30초 voice memo로 오늘 한 줄 남기시겠어요?**
+(텔레그램 음성 메시지로 "오늘 ~ 했어"라고 말씀하시면 일지에 자동 박제됩니다)
+
+**내일 우선순위** (wiki 활성 항목 기반):
+1. {프로젝트 1의 다음 액션}
+2. {프로젝트 2의 다음 액션}
+
+편안한 저녁 보내세요 🫶
+```
+
+## wiki 디렉토리 접근 (auto-aggregate 의존)
+
+- 경로: `/data/wiki/` (entrypoint.sh boot 시 git clone, 시간당 백그라운드 git pull)
+- 활성 프로젝트 추정 방법: `ls -t /data/wiki/wiki/projects/*.md | head -5` → mtime 최신 5개
+- sparse-checkout으로 `_personal/` 폴더 제외됨 (Personal Data Protection)
+- wiki 디렉토리 없음 / pull 실패 시 graceful degradation:
+  ```
+  🌙 오늘 마감 정리
+
+  오늘 일지가 비어 있고 wiki 동기화가 실패해 추정 정보가 없습니다.
+
+  **📱 30초 voice memo로 오늘 한 줄 남기시겠어요?**
+
+  편안한 저녁 보내세요 🫶
+  ```
 
 ## 분량 규칙
-- 핵심 3개: 각 한 줄 (80자 이하)
-- 내일 우선순위 2개: 한 줄씩
-- 전체 응답 300자 이하
+- Path A 핵심 3개: 각 한 줄 (80자 이하)
+- Path B 추정 1-2개: 각 한 줄 (60자 이하)
+- 전체 응답 350자 이하
 
 ## 금지
 - 오늘 일지 전문 인용 금지 (요약만)
-- placeholder 응답
+- placeholder 응답 ("잠시만 기다려주세요" 등)
+- wiki/_personal/ 폴더 read 시도 (Personal Data Protection)
+- wiki/projects 미확인 항목을 "확정"으로 표현 — 항상 "추정" 명시
 EOF_SKILL_DW
 echo "[entrypoint] Force-wrote skills/daily-wrap/SKILL.md"
 
@@ -1133,6 +1130,96 @@ if [ -f "${OPENCLAW_WORKSPACE_DIR}/MEMORY.md" ]; then
   echo "[entrypoint] [DIAG] MEMORY.md end"
 else
   echo "[entrypoint] [DIAG] MEMORY.md not present"
+fi
+
+# --- Wiki sync (2026-05-21 — Plan drwon-claw-auto-aggregate v1.0 Phase C) ---
+# /data/wiki/에 wvb-ai-workspace repo의 wiki만 sparse-checkout.
+# - boot 시 1회: clone 또는 pull
+# - 백그라운드: 시간당 pull (linux daemon 없이 shell loop, openclaw cron 의존 제거)
+# - 보안: GITHUB_PAT은 https URL embedding으로 사용, .git/config는 컨테이너 격리
+# - Personal Data: wiki/_personal/ 폴더는 sparse-checkout으로 영구 제외
+# Reference: Plan §3.4, .claude/rules/personal-data-protection.md
+
+WIKI_DIR="${WIKI_DIR:-/data/wiki}"
+WIKI_REPO_URL="${WIKI_REPO_URL:-https://github.com/drwon-cmd/wvb-ai-workspace.git}"
+WIKI_SYNC_INTERVAL_SECONDS="${WIKI_SYNC_INTERVAL_SECONDS:-3600}"  # 1 hour default
+
+wiki_sync_setup() {
+  if [ -z "${GITHUB_PAT:-}" ]; then
+    echo "[wiki-sync] SKIP — GITHUB_PAT not set. Set Railway env GITHUB_PAT to enable."
+    return 1
+  fi
+
+  # Embed PAT in URL (https://x-access-token:PAT@github.com/...)
+  # x-access-token is the GitHub convention for Fine-grained PAT in HTTPS clone.
+  local auth_url
+  auth_url=$(echo "${WIKI_REPO_URL}" | sed "s|https://|https://x-access-token:${GITHUB_PAT}@|")
+
+  if [ ! -d "${WIKI_DIR}/.git" ]; then
+    echo "[wiki-sync] First clone to ${WIKI_DIR} (sparse-checkout: wiki/ only, _personal excluded)"
+    rm -rf "${WIKI_DIR}"
+    # No-checkout clone + sparse-checkout config + pull
+    git clone --filter=blob:none --no-checkout "${auth_url}" "${WIKI_DIR}" 2>&1 | sed 's/^/  /' || {
+      echo "[wiki-sync] FAIL — clone failed. Check GITHUB_PAT scope (Contents:Read on wvb-ai-workspace)"
+      return 1
+    }
+    (
+      cd "${WIKI_DIR}" || exit 1
+      git sparse-checkout init --cone
+      # wiki 폴더만 + _personal 제외
+      git sparse-checkout set wiki
+      # _personal 제외 (set 후 별도 negative pattern 적용)
+      cat > .git/info/sparse-checkout <<'EOF_SPARSE'
+/wiki/*
+!/wiki/_personal/
+EOF_SPARSE
+      git checkout master 2>&1 | sed 's/^/  /'
+    )
+    echo "[wiki-sync] Initial clone complete. wiki/_personal/ excluded."
+  else
+    echo "[wiki-sync] Existing repo at ${WIKI_DIR} — refreshing remote URL with current PAT"
+    git -C "${WIKI_DIR}" remote set-url origin "${auth_url}"
+  fi
+
+  # First pull to verify auth + freshness
+  if git -C "${WIKI_DIR}" pull --ff-only origin master 2>&1 | sed 's/^/  /'; then
+    echo "[wiki-sync] Initial pull OK ($(git -C "${WIKI_DIR}" rev-parse --short HEAD))"
+    # _personal 디렉토리 실제로 제외됐는지 sanity check
+    if [ -d "${WIKI_DIR}/wiki/_personal" ]; then
+      echo "[wiki-sync] WARNING — wiki/_personal/ found despite sparse-checkout. Investigating."
+      ls "${WIKI_DIR}/wiki/_personal" 2>&1 | head -3 | sed 's/^/  /'
+    else
+      echo "[wiki-sync] Confirmed: wiki/_personal/ properly excluded"
+    fi
+    return 0
+  else
+    echo "[wiki-sync] FAIL — pull failed. Container will retry hourly via background loop."
+    return 1
+  fi
+}
+
+wiki_sync_background_loop() {
+  # 백그라운드 시간당 pull. 실패해도 다음 주기에 재시도.
+  # exec를 막지 않도록 nohup + & 패턴 사용. stdout은 컨테이너 로그로.
+  (
+    while true; do
+      sleep "${WIKI_SYNC_INTERVAL_SECONDS}"
+      if [ -d "${WIKI_DIR}/.git" ]; then
+        if git -C "${WIKI_DIR}" pull --ff-only origin master >/dev/null 2>&1; then
+          echo "[wiki-sync-bg] OK ($(git -C "${WIKI_DIR}" rev-parse --short HEAD)) at $(date +%H:%M)"
+        else
+          echo "[wiki-sync-bg] FAIL at $(date +%H:%M) — will retry in ${WIKI_SYNC_INTERVAL_SECONDS}s"
+        fi
+      fi
+    done
+  ) &
+  echo "[wiki-sync] Background loop started (interval=${WIKI_SYNC_INTERVAL_SECONDS}s, PID=$!)"
+}
+
+if wiki_sync_setup; then
+  wiki_sync_background_loop
+else
+  echo "[wiki-sync] Setup failed — background loop NOT started. daily-wrap Path B will gracefully degrade."
 fi
 
 exec "$@"
