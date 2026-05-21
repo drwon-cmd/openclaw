@@ -732,11 +732,22 @@ user-invocable: true
 - Path B 추정 1-2개: 각 한 줄 (60자 이하)
 - 전체 응답 350자 이하
 
+## 전송 대상 (🚨 cron 발화 시 필수)
+
+daily-wrap 응답은 **반드시** 원대표님 직접 DM으로만 전송:
+
+- `message.action` 호출 시 `target: "telegram:6878269833"` 명시 (원대표님 user ID)
+- **금지**: `target: "telegram:@current"` 또는 `target: "current"`
+- **사유**: Telegram에 실제 username이 `@current` 인 채널이 존재 ("Current x jerry Channel", chat_id `-1002458651455`). cron으로 발화될 때 활성 대화 컨텍스트가 없으면 `@current` reserved keyword가 그 동명 채널로 resolve되어 봇이 멤버가 아니므로 403 Forbidden. 2026-05-21 22:00 SGT 실제 발생.
+
+수동 호출일 때 (원대표님이 직접 "데일리 랩" 입력) 도 동일 — 항상 `telegram:6878269833` 명시.
+
 ## 금지
 - 오늘 일지 전문 인용 금지 (요약만)
 - placeholder 응답 ("잠시만 기다려주세요" 등)
 - wiki/_personal/ 폴더 read 시도 (Personal Data Protection)
 - wiki/projects 미확인 항목을 "확정"으로 표현 — 항상 "추정" 명시
+- **target에 "@current" / "current" 사용 절대 금지** (위 §전송 대상 사유 참조)
 EOF_SKILL_DW
 echo "[entrypoint] Force-wrote skills/daily-wrap/SKILL.md"
 
@@ -801,10 +812,21 @@ MEDIA: /data/workspace/exports/{YYYY-Www}-weekly-retro.pdf
 "이번주 일지가 {N}일치만 있습니다. PDF 생략하고 짧은 텍스트 회고만 드립니다."
 + 본문에 일지 있는 날짜만 정리
 
+## 전송 대상 (🚨 cron 발화 시 필수)
+
+weekly-retro 응답은 **반드시** 원대표님 직접 DM으로만 전송:
+
+- `message.action` 호출 시 `target: "telegram:6878269833"` 명시 (원대표님 user ID)
+- **금지**: `target: "telegram:@current"` 또는 `target: "current"`
+- **사유**: Telegram에 실제 username이 `@current` 인 채널이 존재 ("Current x jerry Channel"). cron으로 발화될 때 활성 대화 컨텍스트가 없으면 `@current` reserved keyword가 그 동명 채널로 resolve되어 403 Forbidden. 2026-05-21 daily-wrap에서 실제 발생.
+
+수동 호출도 동일 — 항상 `telegram:6878269833` 명시.
+
 ## 금지
 - 일지 원문 그대로 복붙 (요약·재구성 필수)
 - placeholder 응답
 - 일지에 없는 추측 추가
+- **target에 "@current" / "current" 사용 절대 금지** (위 §전송 대상 사유 참조)
 EOF_SKILL_WR
 echo "[entrypoint] Force-wrote skills/weekly-retro/SKILL.md"
 
