@@ -1152,7 +1152,7 @@ wiki_sync_setup() {
 
   # Embed PAT in URL (https://x-access-token:PAT@github.com/...)
   # x-access-token is the GitHub convention for Fine-grained PAT in HTTPS clone.
-  local auth_url
+  # Note: shebang is #!/bin/sh (dash) — `local` keyword not supported. Use plain var.
   auth_url=$(echo "${WIKI_REPO_URL}" | sed "s|https://|https://x-access-token:${GITHUB_PAT}@|")
 
   if [ ! -d "${WIKI_DIR}/.git" ]; then
