@@ -1216,10 +1216,33 @@ wiki_sync_background_loop() {
   echo "[wiki-sync] Background loop started (interval=${WIKI_SYNC_INTERVAL_SECONDS}s, PID=$!)"
 }
 
-if wiki_sync_setup; then
-  wiki_sync_background_loop
+# --- Pre-check: git presence (Railway/Nixpacks builder may skip Dockerfile RUN apt git) ---
+# 2026-05-21 RCA: Dockerfile L167 apt-get install git, but Railway runtime had "git: not found".
+# Builder might be Nixpacks-based ignoring Dockerfile, or multi-stage cache miss.
+# Fallback: attempt boot-time install if git missing.
+if ! command -v git >/dev/null 2>&1; then
+  echo "[entrypoint] git not found in PATH — attempting install (PATH=${PATH})"
+  if [ "$(id -u)" -eq 0 ]; then
+    apt-get update -qq 2>&1 | sed 's/^/  /' || echo "[entrypoint] apt-get update failed"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends git 2>&1 | sed 's/^/  /' || echo "[entrypoint] git install failed"
+    if command -v git >/dev/null 2>&1; then
+      echo "[entrypoint] git installed: $(git --version)"
+    else
+      echo "[entrypoint] git still not available after install attempt — wiki sync will SKIP"
+    fi
+  else
+    echo "[entrypoint] cannot apt-get install as non-root (UID=$(id -u))"
+  fi
+fi
+
+if command -v git >/dev/null 2>&1; then
+  if wiki_sync_setup; then
+    wiki_sync_background_loop
+  else
+    echo "[wiki-sync] Setup failed — background loop NOT started. daily-wrap Path B will gracefully degrade."
+  fi
 else
-  echo "[wiki-sync] Setup failed — background loop NOT started. daily-wrap Path B will gracefully degrade."
+  echo "[wiki-sync] SKIP — git binary not available. daily-wrap Path B will gracefully degrade."
 fi
 
 exec "$@"
