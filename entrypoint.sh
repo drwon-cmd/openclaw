@@ -748,6 +748,9 @@ daily-wrap 응답은 **반드시** 원대표님 직접 DM으로만 전송:
 - wiki/_personal/ 폴더 read 시도 (Personal Data Protection)
 - wiki/projects 미확인 항목을 "확정"으로 표현 — 항상 "추정" 명시
 - **target에 "@current" / "current" 사용 절대 금지** (위 §전송 대상 사유 참조)
+- **🚨 PDF 생성·`gen-pdf.js` 호출·`exec` elevated 명령 금지** — daily-wrap은 짧은 텍스트 응답(350자 이하)만이 의도. PDF 생성은 weekly-retro 전용. 일지 내용을 별도 파일로 저장하지 말 것 (텍스트 응답만)
+- **`/data/workspace/exports/` 에 daily-wrap 파일 write 금지** — weekly-retro 전용 경로
+- 본 응답에 "PDF 변환 보류 / elevated 승인 / PDF 생성 완료" 같은 PDF 관련 후처리 멘트 일체 금지
 EOF_SKILL_DW
 echo "[entrypoint] Force-wrote skills/daily-wrap/SKILL.md"
 
